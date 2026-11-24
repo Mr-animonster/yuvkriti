@@ -10,33 +10,63 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as DisplayRouteImport } from './routes/display'
+import { Route as PlayRouteImport } from './routes/play'
+import { Route as SetupRouteImport } from './routes/setup'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DisplayRoute = DisplayRouteImport.update({
+  id: '/display',
+  path: '/display',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlayRoute = PlayRouteImport.update({
+  id: '/play',
+  path: '/play',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SetupRoute = SetupRouteImport.update({
+  id: '/setup',
+  path: '/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/display': typeof DisplayRoute
+  '/play': typeof PlayRoute
+  '/setup': typeof SetupRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/display': typeof DisplayRoute
+  '/play': typeof PlayRoute
+  '/setup': typeof SetupRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/display': typeof DisplayRoute
+  '/play': typeof PlayRoute
+  '/setup': typeof SetupRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/display' | '/play' | '/setup'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/display' | '/play' | '/setup'
+  id: '__root__' | '/' | '/display' | '/play' | '/setup'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  DisplayRoute: typeof DisplayRoute
+  PlayRoute: typeof PlayRoute
+  SetupRoute: typeof SetupRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +78,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/display': {
+      id: '/display'
+      path: '/display'
+      fullPath: '/display'
+      preLoaderRoute: typeof DisplayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/play': {
+      id: '/play'
+      path: '/play'
+      fullPath: '/play'
+      preLoaderRoute: typeof PlayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/setup': {
+      id: '/setup'
+      path: '/setup'
+      fullPath: '/setup'
+      preLoaderRoute: typeof SetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  DisplayRoute: DisplayRoute,
+  PlayRoute: PlayRoute,
+  SetupRoute: SetupRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
