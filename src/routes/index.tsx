@@ -74,7 +74,7 @@ function HomePage() {
             size="lg"
             className="min-h-20 w-full justify-between whitespace-normal px-4 py-4 text-left text-base"
           >
-            <Link to="/play" search={{ role: "bride" }} aria-label="Join as Bride">
+            <Link to="/play" search={{ room: "", role: "bride" }} aria-label="Join as Bride">
               <span className="grid size-11 shrink-0 place-items-center rounded-full bg-card/70 text-maroon">
                 <Heart aria-hidden="true" className="size-5" />
               </span>
@@ -88,7 +88,7 @@ function HomePage() {
             size="lg"
             className="min-h-20 w-full justify-between whitespace-normal border-wedding-gold/80 bg-card px-4 py-4 text-left text-base hover:bg-secondary"
           >
-            <Link to="/play" search={{ role: "groom" }} aria-label="Join as Groom">
+            <Link to="/play" search={{ room: "", role: "groom" }} aria-label="Join as Groom">
               <span className="grid size-11 shrink-0 place-items-center rounded-full bg-secondary text-maroon">
                 <Heart aria-hidden="true" className="size-5" />
               </span>

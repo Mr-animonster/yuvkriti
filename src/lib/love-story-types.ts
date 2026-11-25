@@ -75,6 +75,8 @@ export interface GameStateMessage {
   hearts: number;
   positionPercent: number;
   currentMilestone: string | null;
+  lanePositions?: Record<PartnerRole, number>;
+  gateWaiting?: Record<PartnerRole, boolean>;
 }
 
 export type LoveStoryRealtimeEvent =

@@ -82,9 +82,9 @@ export function createBlankGameConfig(): GameConfigDraft {
 
 export function createSampleGameConfig(): GameConfigDraft {
   return {
-    brideName: "Aanya",
-    groomName: "Rohan",
-    weddingDate: "2026-12-12",
+    brideName: "Prakriti",
+    groomName: "Yuvraj",
+    weddingDate: "2026-12-02",
     finaleMessage: "And so, their best adventure began.",
     brideFacePhoto: "",
     groomFacePhoto: "",
