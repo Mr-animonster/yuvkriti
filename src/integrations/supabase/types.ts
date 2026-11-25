@@ -14,7 +14,54 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      game_config: {
+        Row: {
+          background_music: string | null
+          bride_face_photo: string
+          bride_name: string
+          created_at: string
+          finale_message: string
+          groom_face_photo: string
+          groom_name: string
+          id: string
+          milestones: Json
+          obstacle_labels: string[]
+          singleton_key: boolean
+          updated_at: string
+          wedding_date: string
+        }
+        Insert: {
+          background_music?: string | null
+          bride_face_photo: string
+          bride_name: string
+          created_at?: string
+          finale_message: string
+          groom_face_photo: string
+          groom_name: string
+          id?: string
+          milestones: Json
+          obstacle_labels: string[]
+          singleton_key?: boolean
+          updated_at?: string
+          wedding_date: string
+        }
+        Update: {
+          background_music?: string | null
+          bride_face_photo?: string
+          bride_name?: string
+          created_at?: string
+          finale_message?: string
+          groom_face_photo?: string
+          groom_name?: string
+          id?: string
+          milestones?: Json
+          obstacle_labels?: string[]
+          singleton_key?: boolean
+          updated_at?: string
+          wedding_date?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
