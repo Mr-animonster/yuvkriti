@@ -62,6 +62,7 @@ export function isGameStateMessage(value: unknown): value is GameStateMessage {
     message["type"] === "state" &&
     (message["status"] === "waiting" ||
       message["status"] === "playing" ||
+      message["status"] === "paused" ||
       message["status"] === "complete") &&
     typeof message["score"] === "number" &&
     Number.isFinite(message["score"]) &&

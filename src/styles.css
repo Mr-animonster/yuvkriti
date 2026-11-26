@@ -193,12 +193,18 @@
   overflow: hidden;
   overscroll-behavior: none;
   user-select: none;
+  touch-action: none;
 }
 
 .controller-jump {
   touch-action: none;
   user-select: none;
-  -webkit-user-select: none;
+  width: min(100%, calc(100dvh - 15rem));
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 1;
+  padding: 0;
+  border-radius: 9999px;
 }
 
 .controller-progress-fill {

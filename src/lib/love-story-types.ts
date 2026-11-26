@@ -60,7 +60,7 @@ export interface PlayerInput {
   sentAt: string;
 }
 
-export type GameStateStatus = "waiting" | "playing" | "complete";
+export type GameStateStatus = "waiting" | "playing" | "paused" | "complete";
 
 export interface JumpMessage {
   type: "jump";

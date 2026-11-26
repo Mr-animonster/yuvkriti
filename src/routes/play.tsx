@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type TouchEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type TouchEvent } from "react";
 import { ArrowUp, Heart, Smartphone } from "lucide-react";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useServerFn } from "@tanstack/react-start";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,7 +62,6 @@ function PlayPage() {
   const [roomInput, setRoomInput] = useState(room);
   const [message, setMessage] = useState("");
   const roomIsValid = /^\d{4}$/.test(room);
-  const joining = roomIsValid && (role === "bride" || role === "groom");
 
   useEffect(() => {
     setRoomInput(room);
@@ -76,7 +74,7 @@ function PlayPage() {
     void navigate({ search: { room: nextRoom, role: nextRole } });
   }
 
-  function submitRoom(event: React.FormEvent<HTMLFormElement>) {
+  function submitRoom(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const code = roomInput.replace(/\D/g, "").slice(0, 4);
     if (!/^\d{4}$/.test(code)) {
@@ -91,7 +89,9 @@ function PlayPage() {
     void navigate({ search: { room: code, role } });
   }
 
-  if (joining) return <ControllerRoom roomCode={room} role={role} />;
+  if (roomIsValid && (role === "bride" || role === "groom")) {
+    return <ControllerRoom roomCode={room} role={role} />;
+  }
 
   return (
     <main className="min-h-dvh bg-background text-foreground">

@@ -10,9 +10,14 @@ import mandapBackground from "@/assets/wedding-mandap-finale.png";
 import type { GameConfigDraft, GameStateMessage, PartnerRole } from "@/lib/love-story-types";
 import { RunnerSimulation, RUNNER_LANE_HEIGHT, RUNNER_LOGICAL_HEIGHT, RUNNER_LOGICAL_WIDTH } from "@/lib/runner-engine";
 import { getPublicMediaUrl } from "@/lib/game-config";
+import type { WeddingSoundEffect } from "@/lib/wedding-audio";
 
 export interface RunnerCanvasHandle {
   jump: (role: PartnerRole) => void;
+  pause: () => void;
+  resume: () => void;
+  skipToNextMilestone: () => void;
+  restart: () => void;
 }
 
 interface RunnerCanvasProps {
@@ -22,6 +27,7 @@ interface RunnerCanvasProps {
   onState: (state: GameStateMessage) => void;
   onMilestone: (milestone: GameConfigDraft["milestones"][number]) => void;
   onHeartsRefilled: (message: string) => void;
+  onSoundEffect: (effect: WeddingSoundEffect) => void;
   onFinale: () => void;
 }
 
@@ -550,17 +556,18 @@ function drawFrame(
 }
 
 export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(function RunnerCanvas(
-  { roomCode, config, practiceBots, onState, onMilestone, onHeartsRefilled, onFinale },
+  { roomCode, config, practiceBots, onState, onMilestone, onHeartsRefilled, onSoundEffect, onFinale },
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const simulationRef = useRef<RunnerSimulation | null>(null);
-  const callbackRefs = useRef({ onState, onMilestone, onHeartsRefilled, onFinale });
+  const particlesRef = useRef<ConfettiPiece[]>([]);
+  const callbackRefs = useRef({ onState, onMilestone, onHeartsRefilled, onSoundEffect, onFinale });
   const botRef = useRef(practiceBots);
 
   useEffect(() => {
-    callbackRefs.current = { onState, onMilestone, onHeartsRefilled, onFinale };
-  }, [onFinale, onHeartsRefilled, onMilestone, onState]);
+    callbackRefs.current = { onState, onMilestone, onHeartsRefilled, onSoundEffect, onFinale };
+  }, [onFinale, onHeartsRefilled, onMilestone, onSoundEffect, onState]);
 
   useEffect(() => {
     botRef.current = practiceBots;
@@ -570,6 +577,31 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
     ref,
     () => ({
       jump: (role) => simulationRef.current?.jump(role),
+      pause: () => {
+        const simulation = simulationRef.current;
+        if (!simulation) return;
+        simulation.pause();
+        callbackRefs.current.onState(simulation.getGameState());
+      },
+      resume: () => {
+        const simulation = simulationRef.current;
+        if (!simulation) return;
+        simulation.resume();
+        callbackRefs.current.onState(simulation.getGameState());
+      },
+      skipToNextMilestone: () => {
+        const simulation = simulationRef.current;
+        if (!simulation) return;
+        simulation.skipToNextMilestone();
+        callbackRefs.current.onState(simulation.getGameState());
+      },
+      restart: () => {
+        const simulation = simulationRef.current;
+        if (!simulation) return;
+        simulation.restart();
+        particlesRef.current.length = 0;
+        callbackRefs.current.onState(simulation.getGameState());
+      },
     }),
     [],
   );
@@ -589,25 +621,41 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
     const simulation = new RunnerSimulation(roomCode, config, botRef.current);
     simulationRef.current = simulation;
     const particles: ConfettiPiece[] = [];
+    particlesRef.current = particles;
     let frameId = 0;
     let lastFrame = 0;
     let lastStateSentAt = 0;
     let lastFireworkAt = 0;
+    let fpsWindowStart = 0;
+    let fpsFrames = 0;
+    let reduceEffects = false;
     let finaleSent = false;
 
     const loop = (time: number) => {
       const delta = lastFrame === 0 ? 0 : Math.min(time - lastFrame, 50);
       lastFrame = time;
+      if (fpsWindowStart === 0) fpsWindowStart = time;
+      fpsFrames += 1;
+      if (time - fpsWindowStart >= 1_000) {
+        const fps = (fpsFrames * 1_000) / (time - fpsWindowStart);
+        if (fps < 50) reduceEffects = true;
+        else if (fps > 56) reduceEffects = false;
+        fpsWindowStart = time;
+        fpsFrames = 0;
+      }
       simulation.practiceBots = botRef.current;
       const events = simulation.update(delta);
       if (events.milestone) {
-        spawnConfetti(particles, RUNNER_LOGICAL_WIDTH / 2, RUNNER_LOGICAL_HEIGHT / 2, 90, palette);
+        spawnConfetti(particles, RUNNER_LOGICAL_WIDTH / 2, RUNNER_LOGICAL_HEIGHT / 2, reduceEffects ? 34 : 90, palette);
         callbackRefs.current.onMilestone(events.milestone);
       }
       if (events.heartsRefilled) callbackRefs.current.onHeartsRefilled(events.heartsRefilled);
+      if (events.heartCollected || events.flowerCollected) callbackRefs.current.onSoundEffect("collect");
+      if (events.stumbled) callbackRefs.current.onSoundEffect("stumble");
       if (events.finale && !finaleSent) {
         finaleSent = true;
-        spawnConfetti(particles, RUNNER_LOGICAL_WIDTH / 2, 220, 220, palette, true);
+        spawnConfetti(particles, RUNNER_LOGICAL_WIDTH / 2, 220, reduceEffects ? 90 : 220, palette, true);
+        callbackRefs.current.onSoundEffect("finale");
         callbackRefs.current.onFinale();
       }
       if (simulation.state.status === "complete" && time - lastFireworkAt > 850) {
@@ -616,7 +664,7 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
           particles,
           180 + Math.random() * (RUNNER_LOGICAL_WIDTH - 360),
           80 + Math.random() * 400,
-          34,
+          reduceEffects ? 12 : 34,
           palette,
           true,
         );
@@ -647,6 +695,7 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
     return () => {
       cancelAnimationFrame(frameId);
       simulationRef.current = null;
+      particlesRef.current = [];
     };
   }, [config, roomCode]);
 

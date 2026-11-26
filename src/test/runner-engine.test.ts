@@ -30,6 +30,24 @@ describe("wedding runner engine", () => {
     expect(game.getGameState().hearts).toBe(3);
   });
 
+  it("pauses, skips to a shared milestone gate, and restarts cleanly", () => {
+    const config = createSampleGameConfig();
+    const game = new RunnerSimulation("1842", config);
+
+    game.pause();
+    expect(game.getGameState().status).toBe("paused");
+    game.resume();
+    expect(game.getGameState().status).toBe("playing");
+    game.skipToNextMilestone();
+    expect(game.state.bride.gateStopped).toBe(true);
+    expect(game.state.groom.gateStopped).toBe(true);
+    expect(game.update(16).milestone?.title).toBe(config.milestones[0]?.title);
+    game.state.score = 500;
+    game.restart();
+    expect(game.getGameState().status).toBe("playing");
+    expect(game.getGameState().score).toBe(0);
+  });
+
   it("keeps the requested fixed canvas size and a three-minute-paced run", () => {
     const config = createSampleGameConfig();
     const game = new RunnerSimulation("1842", config);

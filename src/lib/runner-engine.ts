@@ -50,6 +50,9 @@ export interface RunnerFrameEvents {
   milestone: MilestoneDraft | null;
   heartsRefilled: string | null;
   finale: boolean;
+  heartCollected: boolean;
+  flowerCollected: boolean;
+  stumbled: boolean;
 }
 
 export function seedFromRoomCode(roomCode: string): number {
@@ -163,8 +166,58 @@ export class RunnerSimulation {
     lane.jumpRemainingMs = JUMP_DURATION_MS;
   }
 
+  pause() {
+    if (this.state.status === "playing") this.state.status = "paused";
+  }
+
+  resume() {
+    if (this.state.status === "paused") this.state.status = "playing";
+  }
+
+  restart() {
+    this.state.status = "playing";
+    this.state.score = 0;
+    this.state.hearts = 3;
+    this.state.gateIndex = 0;
+    this.state.gatePopupRemainingMs = 0;
+    this.state.refillMessage = null;
+    this.state.refillMessageRemainingMs = 0;
+    this.state.currentMilestone = null;
+    this.state.bride = createLane();
+    this.state.groom = createLane();
+  }
+
+  skipToNextMilestone() {
+    if (this.state.gatePopupRemainingMs > 0) {
+      this.state.status = "playing";
+      this.state.gatePopupRemainingMs = 1;
+      return;
+    }
+
+    const gate = this.state.gateProgress[this.state.gateIndex];
+    this.state.status = "playing";
+    if (gate === undefined) {
+      this.state.bride.progress = 100;
+      this.state.groom.progress = 100;
+      return;
+    }
+
+    for (const lane of [this.state.bride, this.state.groom]) {
+      lane.progress = gate;
+      lane.gateStopped = true;
+    }
+    this.state.currentMilestone = this.milestones[this.state.gateIndex]?.title ?? null;
+  }
+
   update(deltaMs: number): RunnerFrameEvents {
-    const events: RunnerFrameEvents = { milestone: null, heartsRefilled: null, finale: false };
+    const events: RunnerFrameEvents = {
+      milestone: null,
+      heartsRefilled: null,
+      finale: false,
+      heartCollected: false,
+      flowerCollected: false,
+      stumbled: false,
+    };
     if (this.state.status !== "playing") return events;
 
     const delta = Math.max(0, Math.min(deltaMs, 50));
@@ -225,9 +278,12 @@ export class RunnerSimulation {
           if (lane.jumpRemainingMs === 0) {
             lane.stumbleRemainingMs = 900;
             this.state.hearts -= 1;
+            events.stumbled = true;
           }
         } else if (lane.jumpRemainingMs > 0) {
           this.state.score += item.kind === "heart" ? 150 : 100;
+          if (item.kind === "heart") events.heartCollected = true;
+          else events.flowerCollected = true;
         }
       }
 
