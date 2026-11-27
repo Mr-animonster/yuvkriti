@@ -397,7 +397,7 @@ function ControllerRoom({ roomCode, role }: { roomCode: string; role: PartnerRol
             onKeyDown={handleKeyDown}
             onContextMenu={(event) => event.preventDefault()}
             aria-label={canJump ? "Jump" : statusMessage}
-            className={`controller-jump flex flex-col items-center justify-center gap-2 rounded-full border-[0.55rem] border-wedding-gold bg-primary font-display text-6xl font-bold text-primary-foreground shadow-xl transition-transform duration-75 disabled:opacity-100 sm:text-7xl ${pressed ? "scale-95" : "scale-100"}`}
+            className={`controller-jump flex flex-col items-center justify-center gap-2 rounded-full border-[0.55rem] border-wedding-gold font-display text-6xl font-bold text-cream shadow-xl transition-transform duration-75 disabled:opacity-100 sm:text-7xl ${role === "bride" ? "bg-bride-red" : "bg-maroon"} ${pressed ? "scale-95" : "scale-100"}`}
           >
             <ArrowUp aria-hidden="true" className="size-12 sm:size-16" />
             <span>JUMP</span>

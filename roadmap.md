@@ -1,5 +1,7 @@
 # Love Story Runner
 
+- [ ] Redesign the display couple in coordinated Indian wedding attire with photo-circle accessories, personalised floating tags, and named colour-matched controller jump buttons.
+
 - [x] Refresh display-only runner scale, speed/animation, Dhol Boost, Mandap ending, countdowns, and slim HUD without changing realtime or controller logic.
 
 - [ ] Finish the approved app foundation: landing page, routes, wedding theme, shared types, and private setup gate.

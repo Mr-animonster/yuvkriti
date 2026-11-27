@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { gameConfigSchema } from "@/lib/game-config";
+import { createSampleGameConfig, gameConfigSchema } from "@/lib/game-config";
 
 function validConfig(milestoneCount: number, obstacleCount: number) {
   return {
@@ -23,6 +23,13 @@ function validConfig(milestoneCount: number, obstacleCount: number) {
 }
 
 describe("game configuration limits", () => {
+  it("uses Prakriti and Yuvraj as the sample couple", () => {
+    const sample = createSampleGameConfig();
+
+    expect(sample.brideName).toBe("Prakriti");
+    expect(sample.groomName).toBe("Yuvraj");
+  });
+
   it("accepts 4–8 milestones and rejects values outside that range", () => {
     expect(gameConfigSchema.safeParse(validConfig(4, 8)).success).toBe(true);
     expect(gameConfigSchema.safeParse(validConfig(8, 8)).success).toBe(true);

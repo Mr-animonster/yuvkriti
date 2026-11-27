@@ -426,6 +426,45 @@ function drawDust(
   context.restore();
 }
 
+function drawGajra(context: CanvasRenderingContext2D, x: number, y: number, palette: CanvasPalette) {
+  context.save();
+  context.translate(x, y);
+  context.fillStyle = palette.cream;
+  for (let petal = 0; petal < 5; petal += 1) {
+    context.rotate((Math.PI * 2) / 5);
+    context.beginPath();
+    context.ellipse(0, -5, 3, 5, 0, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.fillStyle = palette.gold;
+  context.beginPath();
+  context.arc(0, 0, 2.5, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawOutfitGarland(context: CanvasRenderingContext2D, palette: CanvasPalette) {
+  for (let index = 0; index < 7; index += 1) {
+    const x = -30 + index * 10;
+    const y = -163 + Math.abs(index - 3) * 3;
+    drawFlower(context, x, y, 4.5, palette);
+  }
+}
+
+function drawMojari(context: CanvasRenderingContext2D, x: number, y: number, palette: CanvasPalette) {
+  context.fillStyle = palette.maroon;
+  context.strokeStyle = palette.gold;
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(x - 14, y - 2);
+  context.quadraticCurveTo(x + 5, y - 10, x + 21, y - 3);
+  context.quadraticCurveTo(x + 27, y - 15, x + 17, y - 17);
+  context.quadraticCurveTo(x + 18, y + 3, x - 14, y + 3);
+  context.closePath();
+  context.fill();
+  context.stroke();
+}
+
 function drawCharacter(
   context: CanvasRenderingContext2D,
   role: PartnerRole,
@@ -453,6 +492,34 @@ function drawCharacter(
   context.scale(CHARACTER_SCALE * squashX, CHARACTER_SCALE * squashY);
   if (stumble) context.rotate(Math.sin(runTime * 0.045) * 0.12);
 
+  if (role === "bride") {
+    // The dupatta and braid sit behind the body and stream away from the run direction.
+    const flutter = Math.sin(runTime * 0.012) * 15;
+    context.fillStyle = palette.brideRed;
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 6;
+    context.globalAlpha = 0.88;
+    context.beginPath();
+    context.moveTo(-24, -180);
+    context.quadraticCurveTo(-96, -184 + flutter, -150, -127 + flutter);
+    context.quadraticCurveTo(-117, -92 + flutter, -88, -55 + flutter);
+    context.quadraticCurveTo(-52, -107, -24, -180);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.globalAlpha = 1;
+
+    context.strokeStyle = palette.maroon;
+    context.lineWidth = 24;
+    context.beginPath();
+    context.moveTo(-42, -230);
+    context.quadraticCurveTo(-72, -164, -56 + Math.sin(runTime * 0.015) * 8, -68);
+    context.stroke();
+    for (let index = 0; index < 5; index += 1) {
+      drawGajra(context, -55 - Math.sin(index * 0.8) * 8, -183 + index * 25, palette);
+    }
+  }
+
   context.lineCap = "round";
   context.lineWidth = 18;
   context.strokeStyle = palette.maroon;
@@ -464,23 +531,37 @@ function drawCharacter(
   context.lineTo(26 - swing * 0.65, -12);
   context.lineTo(30 - swing, -2 - Math.max(0, -swing) * 0.12);
   context.stroke();
+  if (role === "groom") {
+    drawMojari(context, -30 + swing, -2 - Math.max(0, swing) * 0.12, palette);
+    drawMojari(context, 30 - swing, -2 - Math.max(0, -swing) * 0.12, palette);
+  }
 
   context.translate(0, bounce);
   if (role === "bride") {
     context.beginPath();
     context.moveTo(-35, -174);
-    context.quadraticCurveTo(-64, -107, -86, -28);
-    context.quadraticCurveTo(0, -8, 86, -28);
+    context.quadraticCurveTo(-64, -107, -88, -28);
+    context.quadraticCurveTo(0, -8, 88, -28);
     context.quadraticCurveTo(64, -107, 35, -174);
     context.closePath();
     context.fillStyle = palette.brideRed;
     context.fill();
     context.strokeStyle = palette.gold;
-    context.lineWidth = 9;
+    context.lineWidth = 10;
     context.beginPath();
-    context.moveTo(-84, -28);
-    context.quadraticCurveTo(0, -10, 84, -28);
+    context.moveTo(-86, -28);
+    context.quadraticCurveTo(0, -10, 86, -28);
     context.stroke();
+    context.lineWidth = 3;
+    for (const panelX of [-48, 0, 48]) {
+      context.beginPath();
+      context.moveTo(panelX * 0.45, -142);
+      context.lineTo(panelX, -40);
+      context.stroke();
+    }
+    for (const motifX of [-48, 0, 48]) {
+      drawFlower(context, motifX, -60, 5, palette);
+    }
     context.fillStyle = palette.maroon;
     context.beginPath();
     context.roundRect(-38, -194, 76, 62, 15);
@@ -488,38 +569,147 @@ function drawCharacter(
     context.strokeStyle = palette.gold;
     context.lineWidth = 6;
     context.beginPath();
+    context.moveTo(-34, -184);
+    context.lineTo(34, -184);
     context.moveTo(30, -188);
     context.quadraticCurveTo(74, -144, 83, -70);
     context.stroke();
   } else {
-    context.fillStyle = palette.maroon;
-    context.beginPath();
-    context.roundRect(-42, -198, 84, 164, 20);
-    context.fill();
+    context.fillStyle = palette.cream;
     context.strokeStyle = palette.gold;
-    context.lineWidth = 6;
+    context.lineWidth = 5;
     context.beginPath();
-    context.moveTo(0, -194);
-    context.lineTo(0, -40);
+    context.roundRect(-44, -200, 88, 166, 20);
+    context.fill();
+    context.stroke();
+    context.strokeStyle = palette.maroon;
+    context.lineWidth = 20;
+    context.beginPath();
+    context.moveTo(-28, -190);
+    context.lineTo(24, -48);
+    context.moveTo(29, -190);
+    context.quadraticCurveTo(54, -126, 44, -57);
+    context.stroke();
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(-30, -190);
+    context.lineTo(22, -48);
     context.stroke();
     context.fillStyle = palette.gold;
     for (let button = 0; button < 5; button += 1) {
       context.beginPath();
-      context.arc(0, -164 + button * 25, 4, 0, Math.PI * 2);
+      context.arc(2, -166 + button * 25, 4, 0, Math.PI * 2);
       context.fill();
     }
+    context.fillStyle = palette.maroon;
+    context.beginPath();
+    context.moveTo(17, -157);
+    context.lineTo(37, -157);
+    context.lineTo(29, -174);
+    context.closePath();
+    context.fill();
   }
 
+  drawOutfitGarland(context, palette);
+
+  const leftHandX = -54 - swing * 0.6;
+  const rightHandX = 54 + swing * 0.6;
+  const handY = -112 + Math.abs(swing) * 0.2;
   context.strokeStyle = palette.skin;
   context.lineWidth = 15;
   context.beginPath();
   context.moveTo(-34, -168);
-  context.lineTo(-54 - swing * 0.6, -112 + Math.abs(swing) * 0.2);
+  context.lineTo(leftHandX, handY);
   context.moveTo(34, -168);
-  context.lineTo(54 + swing * 0.6, -112 + Math.abs(swing) * 0.2);
+  context.lineTo(rightHandX, handY);
   context.stroke();
 
+  for (const handX of [leftHandX, rightHandX]) {
+    context.fillStyle = palette.skin;
+    context.beginPath();
+    context.arc(handX, handY, 10, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 4;
+    context.beginPath();
+    context.arc(handX, handY - 7, 9, 0, Math.PI * 2);
+    context.stroke();
+    if (role === "bride") {
+      context.strokeStyle = palette.maroon;
+      context.lineWidth = 1.8;
+      context.beginPath();
+      context.arc(handX, handY, 5, 0, Math.PI * 2);
+      context.moveTo(handX - 5, handY + 5);
+      context.lineTo(handX + 5, handY - 5);
+      context.stroke();
+    }
+  }
+
   drawPhotoHead(context, faceImage, 0, -238, 56, palette);
+
+  if (role === "bride") {
+    // Hair frames the circular portrait; jewellery remains visible over either photo or cartoon face.
+    context.strokeStyle = palette.maroon;
+    context.lineWidth = 11;
+    context.beginPath();
+    context.arc(0, -238, 54, Math.PI * 0.78, Math.PI * 1.45);
+    context.arc(0, -238, 54, Math.PI * 1.55, Math.PI * 2.22);
+    context.stroke();
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(0, -296);
+    context.lineTo(0, -263);
+    context.stroke();
+    context.fillStyle = palette.gold;
+    context.beginPath();
+    context.arc(0, -260, 6, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = palette.brideRed;
+    context.beginPath();
+    context.arc(0, -247, 3.5, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 3;
+    context.beginPath();
+    context.arc(49, -229, 9, 0, Math.PI * 2);
+    context.moveTo(50, -239);
+    context.quadraticCurveTo(60, -259, 46, -274);
+    context.stroke();
+  } else {
+    // Maroon-and-gold safa, with a kalgi and a short feather above the photo circle.
+    context.fillStyle = palette.maroon;
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 5;
+    context.beginPath();
+    context.moveTo(-58, -272);
+    context.quadraticCurveTo(-55, -315, -13, -319);
+    context.quadraticCurveTo(37, -327, 60, -280);
+    context.quadraticCurveTo(10, -292, -58, -272);
+    context.closePath();
+    context.fill();
+    context.stroke();
+    context.lineWidth = 3;
+    for (const offset of [-28, 0, 28]) {
+      context.beginPath();
+      context.moveTo(offset - 15, -309);
+      context.quadraticCurveTo(offset, -287, offset + 18, -286);
+      context.stroke();
+    }
+    context.fillStyle = palette.marigold;
+    context.beginPath();
+    context.arc(22, -310, 8, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 5;
+    context.beginPath();
+    context.moveTo(23, -316);
+    context.quadraticCurveTo(44, -340, 31, -351);
+    context.stroke();
+    drawGajra(context, 22, -310, palette);
+  }
+
   if (stumble) {
     context.font = '700 38px "DM Sans", sans-serif';
     context.fillStyle = palette.marigold;
@@ -532,24 +722,24 @@ function drawCharacter(
 
 function drawRoleLabel(
   context: CanvasRenderingContext2D,
-  role: PartnerRole,
+  name: string,
   lane: RunnerSimulation["state"]["bride"],
   baseY: number,
   palette: CanvasPalette,
 ) {
-  const y = baseY - getJumpOffset(lane) - 196;
+  const y = baseY - getJumpOffset(lane) - 222;
   context.fillStyle = palette.maroon;
   context.beginPath();
-  context.roundRect(PLAYER_X - 45, y, 90, 30, 15);
+  context.roundRect(PLAYER_X - 66, y, 132, 32, 16);
   context.fill();
   context.strokeStyle = palette.gold;
   context.lineWidth = 2;
   context.stroke();
-  context.font = '700 15px "DM Sans", sans-serif';
+  context.font = '700 17px "DM Sans", sans-serif';
   context.textAlign = "center";
   context.textBaseline = "middle";
   context.fillStyle = palette.cream;
-  context.fillText(role === "bride" ? "BRIDE" : "GROOM", PLAYER_X, y + 15);
+  context.fillText(name, PLAYER_X, y + 16, 118);
 }
 
 function drawForegroundPetals(
@@ -831,7 +1021,13 @@ function drawFrame(
       groundY,
       reducedEffects,
     );
-    drawRoleLabel(context, role, lane, groundY, palette);
+    drawRoleLabel(
+      context,
+      role === "bride" ? config.brideName || "Prakriti" : config.groomName || "Yuvraj",
+      lane,
+      groundY,
+      palette,
+    );
     drawForegroundPetals(context, laneTop, lane.animationTimeMs, palette, reducedEffects);
     if (lane.gateStopped && state.gatePopupRemainingMs === 0) {
       context.save();

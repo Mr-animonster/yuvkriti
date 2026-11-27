@@ -241,7 +241,7 @@ function DisplayPage() {
                 The celebration begins
               </p>
               <h1 className="mt-1 font-display text-4xl font-semibold leading-tight text-maroon sm:text-6xl">
-                {config.brideName || "Prakriti"} &amp; {config.groomName || "Yuvraj"}
+                {config.groomName || "Yuvraj"} &amp; {config.brideName || "Prakriti"}
               </h1>
               <p className="mt-2 flex items-center gap-2 text-sm font-semibold text-foreground sm:text-lg">
                 <span className={`size-2.5 rounded-full ${connection === "connected" ? "bg-chart-2" : "bg-wedding-gold"}`} />
