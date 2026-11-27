@@ -22,16 +22,6 @@ const WAITING_STATE: GameStateMessage = {
   currentMilestone: null,
 };
 
-interface WakeLockHandle {
-  release: () => Promise<void>;
-}
-
-interface NavigatorWithWakeLock extends Navigator {
-  wakeLock?: {
-    request: (type: "screen") => Promise<WakeLockHandle>;
-  };
-}
-
 export const Route = createFileRoute("/play")({
   validateSearch: (search: Record<string, unknown>) => ({
     room: typeof search["room"] === "string" ? search["room"].replace(/\D/g, "").slice(0, 4) : "",
@@ -152,7 +142,7 @@ function ControllerRoom({ roomCode, role }: { roomCode: string; role: PartnerRol
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const lastStateAt = useRef(0);
   const pressTimer = useRef<number | null>(null);
-  const wakeLockRef = useRef<WakeLockHandle | null>(null);
+  const wakeLockRef = useRef<WakeLockSentinel | null>(null);
   const otherRole: PartnerRole = role === "bride" ? "groom" : "bride";
   const playerName = role === "bride" ? config.brideName || "Bride" : config.groomName || "Groom";
   const lanePosition = gameState.lanePositions?.[role] ?? gameState.positionPercent;
@@ -194,10 +184,10 @@ function ControllerRoom({ roomCode, role }: { roomCode: string; role: PartnerRol
   useEffect(() => {
     let active = true;
     let requesting = false;
-    let sentinel: WakeLockHandle | null = null;
+    let sentinel: WakeLockSentinel | null = null;
 
     async function requestWakeLock() {
-      const wakeLock = (navigator as NavigatorWithWakeLock).wakeLock;
+      const wakeLock = navigator.wakeLock;
       if (!active || requesting || wakeLockRef.current || document.visibilityState !== "visible" || !wakeLock) return;
       requesting = true;
       try {

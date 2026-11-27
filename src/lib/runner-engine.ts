@@ -12,8 +12,9 @@ export const TARGET_RUN_DURATION_MS = 150_000;
 export const MILESTONE_HOLD_MS = 4_000;
 export const JUMP_DURATION_MS = 1_450;
 export const FORGIVING_HITBOX_PERCENT = 1.1;
+export const DHOL_BOOST_DURATION_MS = 3_000;
 
-export type TrackItemKind = "obstacle" | "heart" | "flower";
+export type TrackItemKind = "obstacle" | "heart" | "flower" | "dhol";
 
 export interface TrackItem {
   id: string;
@@ -39,6 +40,7 @@ export interface RunnerWorldState {
   gatePopupRemainingMs: number;
   refillMessage: string | null;
   refillMessageRemainingMs: number;
+  boostRemainingMs: number;
   currentMilestone: string | null;
   bride: RunnerLaneState;
   groom: RunnerLaneState;
@@ -52,6 +54,7 @@ export interface RunnerFrameEvents {
   finale: boolean;
   heartCollected: boolean;
   flowerCollected: boolean;
+  dholCollected: boolean;
   stumbled: boolean;
 }
 
@@ -96,13 +99,15 @@ export function createTrack(
     if (gateProgress.some((gate) => Math.abs(gate - progress) < 2.5)) continue;
 
     const roll = random();
-    const kind: TrackItemKind = roll < 0.68 ? "obstacle" : roll < 0.84 ? "heart" : "flower";
+    const kind: TrackItemKind = roll < 0.64 ? "obstacle" : roll < 0.79 ? "heart" : roll < 0.93 ? "flower" : "dhol";
     const label =
       kind === "obstacle"
         ? (labels[Math.floor(random() * labels.length)] ?? labels[0] ?? "Wedding-day twist")
         : kind === "heart"
           ? "Love heart"
-          : "Good-luck flower";
+          : kind === "dhol"
+            ? "Dhol Boost"
+            : "Good-luck flower";
 
     items.push({ id: `track-item-${index}`, progress: Number(progress.toFixed(2)), kind, label });
     index += 1;
@@ -128,6 +133,28 @@ const HEARTS_RETURN_MESSAGES = [
   "A tiny wedding-day wobble. Love says keep dancing!",
 ];
 
+function smoothStep(value: number) {
+  const clamped = Math.max(0, Math.min(1, value));
+  return clamped * clamped * (3 - 2 * clamped);
+}
+
+function paceShape(progress: number) {
+  const position = Math.max(0, Math.min(100, progress)) / 100;
+  return position <= 0.5
+    ? 0.9 + 0.25 * smoothStep(position * 2)
+    : 1.15 - 0.33 * smoothStep((position - 0.5) * 2);
+}
+
+const PACE_NORMALIZER = Array.from({ length: 200 }, (_, index) => paceShape(index / 2)).reduce(
+  (total, value) => total + value,
+  0,
+) / 200;
+
+/** Normalised around 1 so the changing pace still covers the course in about 150 seconds. */
+export function getRunPaceMultiplier(progress: number) {
+  return paceShape(progress) / PACE_NORMALIZER;
+}
+
 export class RunnerSimulation {
   readonly state: RunnerWorldState;
   readonly track: TrackItem[];
@@ -149,6 +176,7 @@ export class RunnerSimulation {
       gatePopupRemainingMs: 0,
       refillMessage: null,
       refillMessageRemainingMs: 0,
+      boostRemainingMs: 0,
       currentMilestone: null,
       bride: createLane(),
       groom: createLane(),
@@ -182,6 +210,7 @@ export class RunnerSimulation {
     this.state.gatePopupRemainingMs = 0;
     this.state.refillMessage = null;
     this.state.refillMessageRemainingMs = 0;
+    this.state.boostRemainingMs = 0;
     this.state.currentMilestone = null;
     this.state.bride = createLane();
     this.state.groom = createLane();
@@ -216,6 +245,7 @@ export class RunnerSimulation {
       finale: false,
       heartCollected: false,
       flowerCollected: false,
+      dholCollected: false,
       stumbled: false,
     };
     if (this.state.status !== "playing") return events;
@@ -237,7 +267,10 @@ export class RunnerSimulation {
       return events;
     }
 
-    const runSpeed = 100 / TARGET_RUN_DURATION_MS;
+    this.state.boostRemainingMs = Math.max(0, this.state.boostRemainingMs - delta);
+    const averageProgress = (this.state.bride.progress + this.state.groom.progress) / 2;
+    const boostMultiplier = this.state.boostRemainingMs > 0 ? 1.28 : 1;
+    const runSpeed = (100 / TARGET_RUN_DURATION_MS) * getRunPaceMultiplier(averageProgress) * boostMultiplier;
     for (const role of ["bride", "groom"] as const) {
       const lane = this.state[role];
       lane.animationTimeMs += delta;
@@ -281,9 +314,12 @@ export class RunnerSimulation {
             events.stumbled = true;
           }
         } else if (lane.jumpRemainingMs > 0) {
-          this.state.score += item.kind === "heart" ? 150 : 100;
+          this.state.score += item.kind === "heart" ? 150 : item.kind === "dhol" ? 200 : 100;
           if (item.kind === "heart") events.heartCollected = true;
-          else events.flowerCollected = true;
+          else if (item.kind === "dhol") {
+            this.state.boostRemainingMs = DHOL_BOOST_DURATION_MS;
+            events.dholCollected = true;
+          } else events.flowerCollected = true;
         }
       }
 

@@ -1,16 +1,25 @@
-import {
-  forwardRef,
-  useEffect,
-  useImperativeHandle,
-  useRef,
-} from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 import runnerBackground from "@/assets/wedding-runner-background.png";
 import mandapBackground from "@/assets/wedding-mandap-finale.png";
 import type { GameConfigDraft, GameStateMessage, PartnerRole } from "@/lib/love-story-types";
-import { RunnerSimulation, RUNNER_LANE_HEIGHT, RUNNER_LOGICAL_HEIGHT, RUNNER_LOGICAL_WIDTH } from "@/lib/runner-engine";
+import {
+  JUMP_DURATION_MS,
+  RunnerSimulation,
+  RUNNER_LANE_HEIGHT,
+  RUNNER_LOGICAL_HEIGHT,
+  RUNNER_LOGICAL_WIDTH,
+  TARGET_RUN_DURATION_MS,
+} from "@/lib/runner-engine";
 import { getPublicMediaUrl } from "@/lib/game-config";
 import type { WeddingSoundEffect } from "@/lib/wedding-audio";
+
+const PLAYER_X = 310;
+const GROUND_OFFSET = 435;
+const VIEW_DISTANCE = 9;
+const CHARACTER_SCALE = 0.56;
+const START_COUNTDOWN_MS = 3_000;
+const TOP_BAR_HEIGHT = 78;
 
 export interface RunnerCanvasHandle {
   jump: (role: PartnerRole) => void;
@@ -96,47 +105,37 @@ function drawBackLayer(
   context.beginPath();
   context.rect(0, laneTop, RUNNER_LOGICAL_WIDTH, tileHeight);
   context.clip();
-  context.drawImage(
-    image,
-    0,
-    sourceTop,
-    image.naturalWidth,
-    sourceHeight,
-    firstX,
-    laneTop,
-    tileWidth,
-    tileHeight,
-  );
-  context.save();
-  context.translate(firstX + tileWidth * 2, 0);
-  context.scale(-1, 1);
-  context.drawImage(
-    image,
-    0,
-    sourceTop,
-    image.naturalWidth,
-    sourceHeight,
-    0,
-    laneTop,
-    tileWidth,
-    tileHeight,
-  );
-  context.restore();
-  context.drawImage(
-    image,
-    0,
-    sourceTop,
-    image.naturalWidth,
-    sourceHeight,
-    firstX + tileWidth * 2,
-    laneTop,
-    tileWidth,
-    tileHeight,
-  );
+  context.globalAlpha = 0.72;
+  for (let tile = 0; tile < 3; tile += 1) {
+    context.save();
+    context.translate(firstX + tile * tileWidth, 0);
+    if (tile % 2 === 1) {
+      context.translate(tileWidth, 0);
+      context.scale(-1, 1);
+    }
+    context.drawImage(
+      image,
+      0,
+      sourceTop,
+      image.naturalWidth,
+      sourceHeight,
+      0,
+      laneTop,
+      tileWidth,
+      tileHeight,
+    );
+    context.restore();
+  }
   context.restore();
 }
 
-function drawFlower(context: CanvasRenderingContext2D, x: number, y: number, size: number, palette: CanvasPalette) {
+function drawFlower(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  size: number,
+  palette: CanvasPalette,
+) {
   context.save();
   context.translate(x, y);
   for (let petal = 0; petal < 6; petal += 1) {
@@ -157,42 +156,59 @@ function drawLaneBackground(
   context: CanvasRenderingContext2D,
   image: HTMLImageElement,
   laneTop: number,
-  elapsed: number,
+  worldTime: number,
   laneIndex: number,
   palette: CanvasPalette,
 ) {
   context.fillStyle = palette.cream;
   context.fillRect(0, laneTop, RUNNER_LOGICAL_WIDTH, RUNNER_LANE_HEIGHT);
-  const farOffset = (elapsed * 0.009 + laneIndex * 740) % RUNNER_LOGICAL_WIDTH;
+
+  // Three independent layers: distant venue, garden trees, then close flowers.
+  const farOffset = (worldTime * 0.009 + laneIndex * 740) % RUNNER_LOGICAL_WIDTH;
   drawBackLayer(context, image, laneTop, farOffset);
 
-  const nearOffset = (elapsed * 0.028 + laneIndex * 360) % RUNNER_LOGICAL_WIDTH;
+  const midOffset = (worldTime * 0.032 + laneIndex * 510) % 420;
   context.save();
-  context.globalAlpha = 0.58;
-  for (let x = -80 - nearOffset; x < RUNNER_LOGICAL_WIDTH + 100; x += 320) {
-    drawFlower(context, x, laneTop + 376 + (laneIndex % 2) * 8, 15, palette);
-    context.strokeStyle = palette.maroon;
-    context.lineWidth = 4;
+  context.globalAlpha = 0.24;
+  context.fillStyle = palette.maroon;
+  for (let x = -160 - midOffset; x < RUNNER_LOGICAL_WIDTH + 200; x += 420) {
     context.beginPath();
-    context.moveTo(x, laneTop + 388);
-    context.lineTo(x - 16, laneTop + 424);
+    context.arc(x, laneTop + 338, 76, Math.PI, Math.PI * 2);
+    context.arc(x + 70, laneTop + 350, 58, Math.PI, Math.PI * 2);
+    context.arc(x - 66, laneTop + 356, 50, Math.PI, Math.PI * 2);
+    context.fill();
+    context.fillRect(x - 5, laneTop + 340, 10, 82);
+  }
+  context.restore();
+
+  const nearOffset = (worldTime * 0.072 + laneIndex * 360) % 300;
+  context.save();
+  context.globalAlpha = 0.72;
+  for (let x = -80 - nearOffset; x < RUNNER_LOGICAL_WIDTH + 100; x += 300) {
+    drawFlower(context, x, laneTop + 390, 12, palette);
+    context.strokeStyle = palette.maroon;
+    context.lineWidth = 3;
+    context.beginPath();
+    context.moveTo(x, laneTop + 400);
+    context.lineTo(x - 13, laneTop + 432);
     context.stroke();
   }
   context.restore();
 
-  const floorY = laneTop + 435;
+  const floorY = laneTop + GROUND_OFFSET;
   context.fillStyle = palette.maroon;
-  context.fillRect(0, floorY, RUNNER_LOGICAL_WIDTH, 7);
+  context.fillRect(0, floorY, RUNNER_LOGICAL_WIDTH, 6);
   context.fillStyle = palette.gold;
-  context.fillRect(0, floorY + 7, RUNNER_LOGICAL_WIDTH, 5);
+  context.fillRect(0, floorY + 6, RUNNER_LOGICAL_WIDTH, 4);
   context.fillStyle = palette.secondary;
-  context.fillRect(0, floorY + 12, RUNNER_LOGICAL_WIDTH, RUNNER_LANE_HEIGHT - (floorY - laneTop) - 12);
+  context.fillRect(0, floorY + 10, RUNNER_LOGICAL_WIDTH, RUNNER_LANE_HEIGHT - GROUND_OFFSET - 10);
+  context.save();
   context.fillStyle = palette.maroon;
   context.globalAlpha = 0.18;
   for (let x = -nearOffset; x < RUNNER_LOGICAL_WIDTH; x += 100) {
     context.fillRect(x, floorY + 38, 34, 3);
   }
-  context.globalAlpha = 1;
+  context.restore();
 }
 
 function drawHeart(context: CanvasRenderingContext2D, x: number, y: number, size: number, color: string) {
@@ -215,22 +231,94 @@ function drawObstacleSign(
   label: string,
   palette: CanvasPalette,
 ) {
-  const width = 182;
-  const height = 73;
+  const width = 102;
+  const height = 41;
   context.fillStyle = palette.maroon;
-  context.fillRect(x - 3, y + height, 6, 48);
+  context.fillRect(x - 2, y + height, 4, 48);
   context.beginPath();
-  context.roundRect(x - width / 2, y, width, height, 11);
+  context.roundRect(x - width / 2, y, width, height, 7);
   context.fillStyle = palette.card;
   context.fill();
-  context.lineWidth = 5;
+  context.lineWidth = 3;
   context.strokeStyle = palette.gold;
   context.stroke();
   context.fillStyle = palette.maroon;
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.font = `700 ${label.length > 18 ? 15 : 18}px "DM Sans", sans-serif`;
-  context.fillText(label, x, y + height / 2, width - 18);
+  context.font = `700 ${label.length > 18 ? 9 : 11}px "DM Sans", sans-serif`;
+  context.fillText(label, x, y + height / 2, width - 12);
+}
+
+function drawDhol(context: CanvasRenderingContext2D, x: number, y: number, palette: CanvasPalette) {
+  context.save();
+  context.translate(x, y);
+  context.rotate(-0.12);
+  context.fillStyle = palette.marigold;
+  context.beginPath();
+  context.roundRect(-25, -17, 50, 34, 9);
+  context.fill();
+  context.strokeStyle = palette.maroon;
+  context.lineWidth = 4;
+  context.stroke();
+  context.fillStyle = palette.cream;
+  context.beginPath();
+  context.ellipse(-23, 0, 7, 17, 0, 0, Math.PI * 2);
+  context.ellipse(23, 0, 7, 17, 0, 0, Math.PI * 2);
+  context.fill();
+  context.strokeStyle = palette.gold;
+  context.lineWidth = 3;
+  context.beginPath();
+  context.moveTo(-17, -14);
+  context.lineTo(17, 14);
+  context.moveTo(-17, 14);
+  context.lineTo(17, -14);
+  context.stroke();
+  context.restore();
+  context.fillStyle = palette.maroon;
+  context.font = '700 12px "DM Sans", sans-serif';
+  context.textAlign = "center";
+  context.fillText("DHOL BOOST", x, y + 38);
+}
+
+function drawMandap(context: CanvasRenderingContext2D, x: number, groundY: number, palette: CanvasPalette) {
+  const top = groundY - 258;
+  context.save();
+  context.globalAlpha = 0.96;
+  context.strokeStyle = palette.maroon;
+  context.lineWidth = 14;
+  context.beginPath();
+  context.moveTo(x - 112, groundY);
+  context.lineTo(x - 112, top + 48);
+  context.quadraticCurveTo(x, top - 34, x + 112, top + 48);
+  context.lineTo(x + 112, groundY);
+  context.stroke();
+  context.strokeStyle = palette.gold;
+  context.lineWidth = 6;
+  context.beginPath();
+  context.moveTo(x - 112, groundY);
+  context.lineTo(x - 112, top + 48);
+  context.quadraticCurveTo(x, top - 34, x + 112, top + 48);
+  context.lineTo(x + 112, groundY);
+  context.stroke();
+  for (let index = 0; index < 9; index += 1) {
+    const angle = Math.PI + (index / 8) * Math.PI;
+    drawFlower(context, x + Math.cos(angle) * 112, top + 48 + Math.sin(angle) * 82, 13, palette);
+  }
+  for (const side of [-1, 1]) {
+    for (let index = 0; index < 5; index += 1) {
+      drawFlower(context, x + side * 112, top + 72 + index * 39, 11, palette);
+    }
+  }
+  context.fillStyle = palette.maroon;
+  context.beginPath();
+  context.roundRect(x - 75, top + 30, 150, 40, 12);
+  context.fill();
+  context.fillStyle = palette.cream;
+  context.font = '700 21px "DM Sans", sans-serif';
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText("MANDAP", x, top + 51);
+  context.restore();
 }
 
 function drawTrackItems(
@@ -241,29 +329,29 @@ function drawTrackItems(
   processed: Set<string>,
   palette: CanvasPalette,
 ) {
-  const viewDistance = 18;
-  const playerX = 310;
   for (const item of items) {
     if (processed.has(item.id)) continue;
     const distance = item.progress - laneProgress;
-    if (distance < -1 || distance > viewDistance) continue;
-    const x = playerX + (distance / viewDistance) * (RUNNER_LOGICAL_WIDTH - playerX - 110);
+    if (distance < -1 || distance > VIEW_DISTANCE) continue;
+    const x = PLAYER_X + (distance / VIEW_DISTANCE) * (RUNNER_LOGICAL_WIDTH - PLAYER_X - 110);
 
     if (item.kind === "obstacle") {
-      drawObstacleSign(context, x, laneTop + 286, item.label, palette);
+      drawObstacleSign(context, x, laneTop + 346, item.label, palette);
       context.fillStyle = palette.marigold;
       context.beginPath();
-      context.arc(x, laneTop + 434, 22, 0, Math.PI * 2);
+      context.arc(x, laneTop + 432, 12, 0, Math.PI * 2);
       context.fill();
     } else if (item.kind === "heart") {
-      drawHeart(context, x, laneTop + 328, 36, palette.brideRed);
+      drawHeart(context, x, laneTop + 363, 22, palette.brideRed);
       context.beginPath();
-      context.arc(x, laneTop + 330, 34, 0, Math.PI * 2);
-      context.lineWidth = 3;
+      context.arc(x, laneTop + 364, 20, 0, Math.PI * 2);
+      context.lineWidth = 2;
       context.strokeStyle = palette.gold;
       context.stroke();
+    } else if (item.kind === "flower") {
+      drawFlower(context, x, laneTop + 365, 14, palette);
     } else {
-      drawFlower(context, x, laneTop + 330, 23, palette);
+      drawDhol(context, x, laneTop + 360, palette);
     }
   }
 }
@@ -294,62 +382,95 @@ function drawPhotoHead(
     context.fill();
     context.fillStyle = palette.foreground;
     context.beginPath();
-    context.arc(centerX - 18, centerY, 5, 0, Math.PI * 2);
-    context.arc(centerX + 18, centerY, 5, 0, Math.PI * 2);
+    context.arc(centerX - 10, centerY, 3, 0, Math.PI * 2);
+    context.arc(centerX + 10, centerY, 3, 0, Math.PI * 2);
     context.fill();
     context.strokeStyle = palette.foreground;
-    context.lineWidth = 4;
+    context.lineWidth = 3;
     context.beginPath();
-    context.arc(centerX, centerY + 10, 16, 0.2, Math.PI - 0.2);
+    context.arc(centerX, centerY + 5, 9, 0.2, Math.PI - 0.2);
     context.stroke();
   }
   context.restore();
   context.beginPath();
-  context.arc(centerX, centerY, radius + 5, 0, Math.PI * 2);
-  context.lineWidth = 9;
+  context.arc(centerX, centerY, radius + 3, 0, Math.PI * 2);
+  context.lineWidth = 5;
   context.strokeStyle = palette.gold;
   context.stroke();
+}
+
+function getJumpOffset(lane: RunnerSimulation["state"]["bride"]) {
+  if (lane.jumpRemainingMs <= 0) return 0;
+  const progress = 1 - lane.jumpRemainingMs / JUMP_DURATION_MS;
+  return Math.sin(progress * Math.PI) * 88;
+}
+
+function drawDust(
+  context: CanvasRenderingContext2D,
+  x: number,
+  groundY: number,
+  animationTime: number,
+  palette: CanvasPalette,
+  reduced: boolean,
+) {
+  context.save();
+  context.fillStyle = palette.gold;
+  const count = reduced ? 2 : 4;
+  for (let index = 0; index < count; index += 1) {
+    const age = (animationTime / 520 + index / count) % 1;
+    context.globalAlpha = (1 - age) * 0.34;
+    context.beginPath();
+    context.arc(x - 20 - age * 82, groundY - 3 - age * 24, 3 + age * 9, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.restore();
 }
 
 function drawCharacter(
   context: CanvasRenderingContext2D,
   role: PartnerRole,
-  laneTop: number,
   lane: RunnerSimulation["state"]["bride"],
   faceImage: HTMLImageElement | null,
   palette: CanvasPalette,
   x: number,
   baseY: number,
-  elapsed: number,
+  reducedEffects: boolean,
 ) {
   const jumping = lane.jumpRemainingMs > 0;
-  const jumpProgress = jumping ? 1 - lane.jumpRemainingMs / 1_450 : 0;
-  const jumpOffset = jumping ? Math.sin(jumpProgress * Math.PI) * 100 : 0;
+  const jumpProgress = jumping ? 1 - lane.jumpRemainingMs / JUMP_DURATION_MS : 0;
+  const jumpOffset = getJumpOffset(lane);
   const stumble = lane.stumbleRemainingMs > 0;
-  const bounce = jumping ? 0 : Math.sin((lane.animationTimeMs + elapsed) * 0.014) * 4;
-  const swing = Math.sin((lane.animationTimeMs + elapsed) * 0.018) * 25;
+  const runTime = lane.animationTimeMs;
+  const swing = Math.sin(runTime * 0.022) * 28;
+  const bounce = jumping || lane.gateStopped ? 0 : -Math.abs(Math.sin(runTime * 0.022)) * 5;
+  const squashX = jumping && jumpProgress > 0.8 ? 1.09 : jumping && jumpProgress < 0.16 ? 0.95 : 1;
+  const squashY = jumping && jumpProgress > 0.8 ? 0.92 : jumping && jumpProgress < 0.16 ? 1.07 : 1;
+
+  if (!jumping && !lane.gateStopped) drawDust(context, x, baseY, runTime, palette, reducedEffects);
 
   context.save();
-  context.translate(x, baseY - jumpOffset + bounce);
-  if (stumble) context.rotate(Math.sin(elapsed * 0.045) * 0.11);
+  context.translate(x, baseY - jumpOffset);
+  context.scale(CHARACTER_SCALE * squashX, CHARACTER_SCALE * squashY);
+  if (stumble) context.rotate(Math.sin(runTime * 0.045) * 0.12);
 
   context.lineCap = "round";
   context.lineWidth = 18;
   context.strokeStyle = palette.maroon;
   context.beginPath();
-  context.moveTo(-18, -28);
-  context.lineTo(-24 + swing * 0.6, -2);
-  context.lineTo(-28 + swing, 0);
-  context.moveTo(18, -28);
-  context.lineTo(26 - swing * 0.6, -2);
-  context.lineTo(30 - swing, 0);
+  context.moveTo(-18, -36);
+  context.lineTo(-24 + swing * 0.65, -12);
+  context.lineTo(-30 + swing, -2 - Math.max(0, swing) * 0.12);
+  context.moveTo(18, -36);
+  context.lineTo(26 - swing * 0.65, -12);
+  context.lineTo(30 - swing, -2 - Math.max(0, -swing) * 0.12);
   context.stroke();
 
+  context.translate(0, bounce);
   if (role === "bride") {
     context.beginPath();
     context.moveTo(-35, -174);
-    context.quadraticCurveTo(-64, -107, -94, -8);
-    context.quadraticCurveTo(0, 14, 94, -8);
+    context.quadraticCurveTo(-64, -107, -86, -28);
+    context.quadraticCurveTo(0, -8, 86, -28);
     context.quadraticCurveTo(64, -107, 35, -174);
     context.closePath();
     context.fillStyle = palette.brideRed;
@@ -357,7 +478,8 @@ function drawCharacter(
     context.strokeStyle = palette.gold;
     context.lineWidth = 9;
     context.beginPath();
-    context.quadraticCurveTo(0, 8, 92, -8);
+    context.moveTo(-84, -28);
+    context.quadraticCurveTo(0, -10, 84, -28);
     context.stroke();
     context.fillStyle = palette.maroon;
     context.beginPath();
@@ -370,23 +492,15 @@ function drawCharacter(
     context.quadraticCurveTo(74, -144, 83, -70);
     context.stroke();
   } else {
-    context.strokeStyle = palette.maroon;
-    context.lineWidth = 18;
-    context.beginPath();
-    context.moveTo(-18, -30);
-    context.lineTo(-26 - swing * 0.7, -1);
-    context.moveTo(18, -30);
-    context.lineTo(26 + swing * 0.7, -1);
-    context.stroke();
     context.fillStyle = palette.maroon;
     context.beginPath();
-    context.roundRect(-42, -198, 84, 180, 20);
+    context.roundRect(-42, -198, 84, 164, 20);
     context.fill();
     context.strokeStyle = palette.gold;
     context.lineWidth = 6;
     context.beginPath();
     context.moveTo(0, -194);
-    context.lineTo(0, -28);
+    context.lineTo(0, -40);
     context.stroke();
     context.fillStyle = palette.gold;
     for (let button = 0; button < 5; button += 1) {
@@ -400,9 +514,9 @@ function drawCharacter(
   context.lineWidth = 15;
   context.beginPath();
   context.moveTo(-34, -168);
-  context.lineTo(-54 - swing * 0.45, -112);
+  context.lineTo(-54 - swing * 0.6, -112 + Math.abs(swing) * 0.2);
   context.moveTo(34, -168);
-  context.lineTo(54 + swing * 0.45, -112);
+  context.lineTo(54 + swing * 0.6, -112 + Math.abs(swing) * 0.2);
   context.stroke();
 
   drawPhotoHead(context, faceImage, 0, -238, 56, palette);
@@ -414,22 +528,170 @@ function drawCharacter(
     context.fillText("✦", 82, -294);
   }
   context.restore();
-  void laneTop;
 }
 
-function drawLabel(context: CanvasRenderingContext2D, label: string, x: number, y: number, palette: CanvasPalette) {
-  context.fillStyle = palette.card;
+function drawRoleLabel(
+  context: CanvasRenderingContext2D,
+  role: PartnerRole,
+  lane: RunnerSimulation["state"]["bride"],
+  baseY: number,
+  palette: CanvasPalette,
+) {
+  const y = baseY - getJumpOffset(lane) - 196;
+  context.fillStyle = palette.maroon;
   context.beginPath();
-  context.roundRect(x, y, 178, 44, 18);
+  context.roundRect(PLAYER_X - 45, y, 90, 30, 15);
   context.fill();
   context.strokeStyle = palette.gold;
-  context.lineWidth = 3;
+  context.lineWidth = 2;
   context.stroke();
-  context.font = '700 19px "DM Sans", sans-serif';
+  context.font = '700 15px "DM Sans", sans-serif';
   context.textAlign = "center";
   context.textBaseline = "middle";
+  context.fillStyle = palette.cream;
+  context.fillText(role === "bride" ? "BRIDE" : "GROOM", PLAYER_X, y + 15);
+}
+
+function drawForegroundPetals(
+  context: CanvasRenderingContext2D,
+  laneTop: number,
+  worldTime: number,
+  palette: CanvasPalette,
+  reduced: boolean,
+) {
+  const count = reduced ? 5 : 12;
+  context.save();
+  for (let index = 0; index < count; index += 1) {
+    const travel = (worldTime * (0.11 + (index % 3) * 0.025) + index * 233) % (RUNNER_LOGICAL_WIDTH + 240);
+    const x = RUNNER_LOGICAL_WIDTH + 120 - travel;
+    const y = laneTop + 115 + ((index * 71) % 340) + Math.sin(worldTime * 0.003 + index) * 25;
+    context.translate(x, y);
+    context.rotate(worldTime * 0.002 + index);
+    context.globalAlpha = 0.35 + (index % 3) * 0.15;
+    context.fillStyle = index % 2 === 0 ? palette.marigold : palette.brideRed;
+    context.beginPath();
+    context.ellipse(0, 0, 8, 4, 0, 0, Math.PI * 2);
+    context.fill();
+    context.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  context.restore();
+}
+
+function drawMiniHead(
+  context: CanvasRenderingContext2D,
+  image: HTMLImageElement | null,
+  role: PartnerRole,
+  x: number,
+  y: number,
+  palette: CanvasPalette,
+) {
+  context.save();
+  context.beginPath();
+  context.arc(x, y, 15, 0, Math.PI * 2);
+  context.clip();
+  context.fillStyle = palette.skin;
+  context.fillRect(x - 15, y - 15, 30, 30);
+  if (image?.complete && image.naturalWidth > 0) {
+    const crop = Math.min(image.naturalWidth, image.naturalHeight);
+    context.drawImage(image, (image.naturalWidth - crop) / 2, (image.naturalHeight - crop) / 2, crop, crop, x - 15, y - 15, 30, 30);
+  } else {
+    context.fillStyle = palette.maroon;
+    context.font = '700 15px "DM Sans", sans-serif';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(role === "bride" ? "B" : "G", x, y + 1);
+  }
+  context.restore();
+  context.strokeStyle = palette.gold;
+  context.lineWidth = 3;
+  context.beginPath();
+  context.arc(x, y, 16, 0, Math.PI * 2);
+  context.stroke();
+}
+
+function formatCountdown(seconds: number) {
+  const safeSeconds = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(safeSeconds / 60)}:${String(safeSeconds % 60).padStart(2, "0")}`;
+}
+
+function drawTopBar(
+  context: CanvasRenderingContext2D,
+  simulation: RunnerSimulation,
+  config: GameConfigDraft,
+  roomCode: string,
+  bridePhoto: HTMLImageElement | null,
+  groomPhoto: HTMLImageElement | null,
+  palette: CanvasPalette,
+) {
+  const state = simulation.state;
+  context.save();
+  context.globalAlpha = 0.92;
   context.fillStyle = palette.maroon;
-  context.fillText(label, x + 89, y + 22, 160);
+  context.fillRect(0, 0, RUNNER_LOGICAL_WIDTH, TOP_BAR_HEIGHT);
+  context.restore();
+  context.fillStyle = palette.gold;
+  context.fillRect(0, TOP_BAR_HEIGHT - 3, RUNNER_LOGICAL_WIDTH, 3);
+
+  context.textAlign = "left";
+  context.fillStyle = palette.cream;
+  context.font = '600 29px "Cormorant Garamond", serif';
+  context.fillText(`${config.groomName || "Yuvraj"} & ${config.brideName || "Prakriti"}`, 30, 34);
+  context.fillStyle = palette.gold;
+  context.font = '600 14px "DM Sans", sans-serif';
+  context.fillText(`LOVE STORY RUNNER  •  ROOM ${roomCode}`, 31, 59);
+
+  const left = 560;
+  const centre = 910;
+  const right = 1260;
+  const lineY = 29;
+  context.strokeStyle = palette.gold;
+  context.lineWidth = 4;
+  context.beginPath();
+  context.moveTo(left, lineY);
+  context.lineTo(right, lineY);
+  context.stroke();
+  for (const gate of state.gateProgress) {
+    const ratio = gate / 100;
+    for (const x of [left + (centre - left) * ratio, right - (right - centre) * ratio]) {
+      context.fillStyle = palette.cream;
+      context.beginPath();
+      context.arc(x, lineY, 4, 0, Math.PI * 2);
+      context.fill();
+    }
+  }
+  context.fillStyle = palette.marigold;
+  context.beginPath();
+  context.arc(centre, lineY, 13, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = palette.maroon;
+  context.font = '700 15px "DM Sans", sans-serif';
+  context.textAlign = "center";
+  context.fillText("M", centre, lineY + 5);
+  drawMiniHead(context, bridePhoto, "bride", left + (centre - left) * (state.bride.progress / 100), lineY, palette);
+  drawMiniHead(context, groomPhoto, "groom", right - (right - centre) * (state.groom.progress / 100), lineY, palette);
+
+  const averageProgress = (state.bride.progress + state.groom.progress) / 2;
+  const secondsLeft = ((100 - averageProgress) / 100) * (TARGET_RUN_DURATION_MS / 1_000);
+  context.fillStyle = palette.cream;
+  context.font = '600 16px "DM Sans", sans-serif';
+  context.fillText(averageProgress >= 99.9 ? "Welcome to the Mandap" : `Mandap in ${formatCountdown(secondsLeft)}`, centre, 62);
+
+  context.textAlign = "right";
+  context.fillStyle = palette.cream;
+  context.font = '700 22px "DM Sans", sans-serif';
+  context.fillText(state.score.toLocaleString(), 1810, 32);
+  context.fillStyle = palette.gold;
+  context.font = '600 12px "DM Sans", sans-serif';
+  context.fillText("SCORE", 1810, 53);
+  for (let index = 0; index < 3; index += 1) {
+    drawHeart(context, 1840 + index * 24, 29, 13, index < state.hearts ? palette.marigold : palette.secondary);
+  }
+  if (state.boostRemainingMs > 0) {
+    context.textAlign = "center";
+    context.fillStyle = palette.marigold;
+    context.font = '700 15px "DM Sans", sans-serif';
+    context.fillText(`DHOL BOOST ${(state.boostRemainingMs / 1_000).toFixed(1)}s`, 1480, 59);
+  }
 }
 
 function spawnConfetti(
@@ -489,9 +751,32 @@ function drawParticles(context: CanvasRenderingContext2D, particles: ConfettiPie
   }
 }
 
+function drawSpeedEffects(
+  context: CanvasRenderingContext2D,
+  laneTop: number,
+  worldTime: number,
+  palette: CanvasPalette,
+) {
+  context.save();
+  context.strokeStyle = palette.gold;
+  context.lineWidth = 3;
+  context.globalAlpha = 0.48;
+  for (let index = 0; index < 16; index += 1) {
+    const x = (index * 173 + worldTime * 0.6) % RUNNER_LOGICAL_WIDTH;
+    const y = laneTop + 120 + ((index * 67) % 280);
+    context.beginPath();
+    context.moveTo(x, y);
+    context.lineTo(x - 80 - (index % 3) * 30, y);
+    context.stroke();
+  }
+  context.restore();
+}
+
 function drawFrame(
   context: CanvasRenderingContext2D,
   simulation: RunnerSimulation,
+  config: GameConfigDraft,
+  roomCode: string,
   palette: CanvasPalette,
   backgroundImage: HTMLImageElement,
   finaleImage: HTMLImageElement,
@@ -500,6 +785,8 @@ function drawFrame(
   elapsed: number,
   deltaMs: number,
   particles: ConfettiPiece[],
+  reducedEffects: boolean,
+  countdown: string | null,
 ) {
   const state = simulation.state;
   context.fillStyle = palette.background;
@@ -509,33 +796,46 @@ function drawFrame(
     if (finaleImage.complete && finaleImage.naturalWidth > 0) {
       context.drawImage(finaleImage, 0, 0, RUNNER_LOGICAL_WIDTH, RUNNER_LOGICAL_HEIGHT);
     }
-    drawCharacter(context, "bride", 0, state.bride, bridePhoto, palette, 850, 887, elapsed);
-    drawCharacter(context, "groom", 0, state.groom, groomPhoto, palette, 1_080, 887, elapsed);
+    drawCharacter(context, "bride", state.bride, bridePhoto, palette, 850, 887, reducedEffects);
+    drawCharacter(context, "groom", state.groom, groomPhoto, palette, 1_080, 887, reducedEffects);
     drawParticles(context, particles, deltaMs);
     return;
+  }
+
+  const boosted = state.boostRemainingMs > 0;
+  if (boosted) {
+    const strength = Math.min(1, state.boostRemainingMs / 450);
+    context.translate(Math.sin(elapsed * 0.11) * 5 * strength, Math.cos(elapsed * 0.14) * 3 * strength);
   }
 
   const laneRoles: PartnerRole[] = ["bride", "groom"];
   laneRoles.forEach((role, laneIndex) => {
     const laneTop = laneIndex * RUNNER_LANE_HEIGHT;
     const lane = state[role];
-    drawLaneBackground(context, backgroundImage, laneTop, elapsed, laneIndex, palette);
+    const groundY = laneTop + GROUND_OFFSET;
+    drawLaneBackground(context, backgroundImage, laneTop, lane.animationTimeMs, laneIndex, palette);
+    if (lane.progress >= 85) {
+      const approach = Math.min(1, (100 - lane.progress) / 15);
+      const mandapX = PLAYER_X + approach * (RUNNER_LOGICAL_WIDTH - PLAYER_X - 110);
+      drawMandap(context, mandapX, groundY, palette);
+    }
     drawTrackItems(context, laneTop, lane.progress, simulation.track, lane.processedItemIds, palette);
+    if (boosted) drawSpeedEffects(context, laneTop, lane.animationTimeMs, palette);
     drawCharacter(
       context,
       role,
-      laneTop,
       lane,
       role === "bride" ? bridePhoto : groomPhoto,
       palette,
-      310,
-      laneTop + 435,
-      elapsed,
+      PLAYER_X,
+      groundY,
+      reducedEffects,
     );
-    drawLabel(context, role === "bride" ? "BRIDE" : "GROOM", 44, laneTop + 28, palette);
+    drawRoleLabel(context, role, lane, groundY, palette);
+    drawForegroundPetals(context, laneTop, lane.animationTimeMs, palette, reducedEffects);
     if (lane.gateStopped && state.gatePopupRemainingMs === 0) {
       context.save();
-      context.globalAlpha = 0.85;
+      context.globalAlpha = 0.9;
       context.fillStyle = palette.card;
       context.beginPath();
       context.roundRect(1_350, laneTop + 310, 360, 90, 18);
@@ -548,11 +848,33 @@ function drawFrame(
     }
   });
 
+  context.setTransform(1, 0, 0, 1, 0, 0);
   context.fillStyle = palette.maroon;
   context.fillRect(0, RUNNER_LANE_HEIGHT - 4, RUNNER_LOGICAL_WIDTH, 8);
   context.fillStyle = palette.gold;
   context.fillRect(0, RUNNER_LANE_HEIGHT, RUNNER_LOGICAL_WIDTH, 3);
   drawParticles(context, particles, deltaMs);
+  drawTopBar(context, simulation, config, roomCode, bridePhoto, groomPhoto, palette);
+
+  if (countdown) {
+    context.save();
+    context.fillStyle = palette.maroon;
+    context.globalAlpha = 0.28;
+    context.fillRect(0, TOP_BAR_HEIGHT, RUNNER_LOGICAL_WIDTH, RUNNER_LOGICAL_HEIGHT - TOP_BAR_HEIGHT);
+    context.globalAlpha = 0.96;
+    context.beginPath();
+    context.arc(RUNNER_LOGICAL_WIDTH / 2, RUNNER_LOGICAL_HEIGHT / 2, 116, 0, Math.PI * 2);
+    context.fill();
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 8;
+    context.stroke();
+    context.fillStyle = palette.cream;
+    context.font = countdown === "GO!" ? '700 88px "DM Sans", sans-serif' : '700 112px "DM Sans", sans-serif';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(countdown, RUNNER_LOGICAL_WIDTH / 2, RUNNER_LOGICAL_HEIGHT / 2 + 4);
+    context.restore();
+  }
 }
 
 export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(function RunnerCanvas(
@@ -562,6 +884,8 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const simulationRef = useRef<RunnerSimulation | null>(null);
   const particlesRef = useRef<ConfettiPiece[]>([]);
+  const countdownStartedAtRef = useRef<number | null>(null);
+  const finaleSentRef = useRef(false);
   const callbackRefs = useRef({ onState, onMilestone, onHeartsRefilled, onSoundEffect, onFinale });
   const botRef = useRef(practiceBots);
 
@@ -600,6 +924,8 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
         if (!simulation) return;
         simulation.restart();
         particlesRef.current.length = 0;
+        countdownStartedAtRef.current = performance.now();
+        finaleSentRef.current = false;
         callbackRefs.current.onState(simulation.getGameState());
       },
     }),
@@ -622,6 +948,8 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
     simulationRef.current = simulation;
     const particles: ConfettiPiece[] = [];
     particlesRef.current = particles;
+    countdownStartedAtRef.current = null;
+    finaleSentRef.current = false;
     let frameId = 0;
     let lastFrame = 0;
     let lastStateSentAt = 0;
@@ -629,7 +957,6 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
     let fpsWindowStart = 0;
     let fpsFrames = 0;
     let reduceEffects = false;
-    let finaleSent = false;
 
     const loop = (time: number) => {
       const delta = lastFrame === 0 ? 0 : Math.min(time - lastFrame, 50);
@@ -643,17 +970,37 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
         fpsWindowStart = time;
         fpsFrames = 0;
       }
+
+      if (countdownStartedAtRef.current === null) countdownStartedAtRef.current = time;
+      const countdownElapsed = time - countdownStartedAtRef.current;
+      const countingDown = countdownElapsed < START_COUNTDOWN_MS;
+      const countdown = countingDown
+        ? countdownElapsed < 750
+          ? "3"
+          : countdownElapsed < 1_500
+            ? "2"
+            : countdownElapsed < 2_250
+              ? "1"
+              : "GO!"
+        : null;
+
       simulation.practiceBots = botRef.current;
-      const events = simulation.update(delta);
+      const events = countingDown
+        ? { milestone: null, heartsRefilled: null, finale: false, heartCollected: false, flowerCollected: false, dholCollected: false, stumbled: false }
+        : simulation.update(delta);
+      if (countingDown) {
+        simulation.state.bride.jumpRemainingMs = 0;
+        simulation.state.groom.jumpRemainingMs = 0;
+      }
       if (events.milestone) {
         spawnConfetti(particles, RUNNER_LOGICAL_WIDTH / 2, RUNNER_LOGICAL_HEIGHT / 2, reduceEffects ? 34 : 90, palette);
         callbackRefs.current.onMilestone(events.milestone);
       }
       if (events.heartsRefilled) callbackRefs.current.onHeartsRefilled(events.heartsRefilled);
-      if (events.heartCollected || events.flowerCollected) callbackRefs.current.onSoundEffect("collect");
+      if (events.heartCollected || events.flowerCollected || events.dholCollected) callbackRefs.current.onSoundEffect("collect");
       if (events.stumbled) callbackRefs.current.onSoundEffect("stumble");
-      if (events.finale && !finaleSent) {
-        finaleSent = true;
+      if (events.finale && !finaleSentRef.current) {
+        finaleSentRef.current = true;
         spawnConfetti(particles, RUNNER_LOGICAL_WIDTH / 2, 220, reduceEffects ? 90 : 220, palette, true);
         callbackRefs.current.onSoundEffect("finale");
         callbackRefs.current.onFinale();
@@ -675,6 +1022,8 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
       drawFrame(
         context,
         simulation,
+        config,
+        roomCode,
         palette,
         backgroundImage,
         finaleImage,
@@ -683,6 +1032,8 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
         time,
         delta,
         particles,
+        reduceEffects,
+        countdown,
       );
       if (time - lastStateSentAt >= 200) {
         lastStateSentAt = time;

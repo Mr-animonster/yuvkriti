@@ -8,6 +8,8 @@ import {
   RunnerSimulation,
   seedFromRoomCode,
   TARGET_RUN_DURATION_MS,
+  DHOL_BOOST_DURATION_MS,
+  getRunPaceMultiplier,
 } from "@/lib/runner-engine";
 
 describe("wedding runner engine", () => {
@@ -46,6 +48,27 @@ describe("wedding runner engine", () => {
     game.restart();
     expect(game.getGameState().status).toBe("playing");
     expect(game.getGameState().score).toBe(0);
+  });
+
+  it("ramps from 90% energy to 115% at the midpoint and eases into the finale", () => {
+    const start = getRunPaceMultiplier(0);
+    const middle = getRunPaceMultiplier(50);
+    const finish = getRunPaceMultiplier(100);
+
+    expect(start / middle).toBeCloseTo(0.9 / 1.15, 5);
+    expect(finish).toBeLessThan(start);
+  });
+
+  it("gives a collected Dhol exactly three seconds of extra speed", () => {
+    const game = new RunnerSimulation("1842", createSampleGameConfig());
+    game.track.push({ id: "test-dhol", progress: 0.01, kind: "dhol", label: "Dhol Boost" });
+
+    game.jump("bride");
+    const events = game.update(16);
+
+    expect(events.dholCollected).toBe(true);
+    expect(game.state.boostRemainingMs).toBe(DHOL_BOOST_DURATION_MS);
+    expect(game.state.score).toBe(200);
   });
 
   it("keeps the requested fixed canvas size and a three-minute-paced run", () => {

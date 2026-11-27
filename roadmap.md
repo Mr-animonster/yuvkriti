@@ -1,5 +1,7 @@
 # Love Story Runner
 
+- [x] Refresh display-only runner scale, speed/animation, Dhol Boost, Mandap ending, countdowns, and slim HUD without changing realtime or controller logic.
+
 - [ ] Finish the approved app foundation: landing page, routes, wedding theme, shared types, and private setup gate.
 - [ ] Build `/setup` data editing for one game configuration, photo/audio uploads, sortable milestones, obstacle labels, and sample content.
 - [ ] Add 4-digit realtime rooms, QR joining, exclusive bride/groom presence, host start/override, jump input broadcast, 5 Hz state updates, and a controller signal indicator without gameplay database writes.

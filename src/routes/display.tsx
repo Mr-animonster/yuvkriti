@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Award, Flower2, Heart, Music2, Sparkles } from "lucide-react";
+import { Award, Flower2, Sparkles } from "lucide-react";
 import { createFileRoute } from "@tanstack/react-router";
 import { QRCodeSVG } from "qrcode.react";
 
@@ -69,7 +69,7 @@ function DisplayPage() {
   const [practiceBots, setPracticeBots] = useState(false);
   const [activeMilestone, setActiveMilestone] = useState<MilestoneDraft | null>(null);
   const [heartMessage, setHeartMessage] = useState("");
-  const [lastJump, setLastJump] = useState<PartnerRole | null>(null);
+  const [, setLastJump] = useState<PartnerRole | null>(null);
 
   useEffect(() => {
     const savedRoomCode = window.sessionStorage.getItem("love-story-runner-display-room");
@@ -289,28 +289,9 @@ function DisplayPage() {
             onState={setGameStateFromEngine}
             onMilestone={handleMilestone}
             onHeartsRefilled={handleHeartsRefilled}
+            onSoundEffect={playMilestoneChime}
             onFinale={handleFinale}
           />
-          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-3 sm:p-5">
-            <div className="text-left">
-              <p className="inline-flex items-center gap-2 text-sm font-semibold text-maroon sm:text-lg">
-                <Flower2 aria-hidden="true" className="size-4 text-marigold sm:size-5" />
-                Love Story Runner
-              </p>
-              <p className="mt-1 text-xs font-medium text-maroon sm:text-sm">
-                {gameState.currentMilestone ? `Milestone: ${gameState.currentMilestone}` : `Room ${roomCode}`}
-              </p>
-            </div>
-            <div className="flex items-center gap-3 rounded-full border border-wedding-gold/70 bg-card/90 px-3 py-2 text-sm font-semibold text-maroon sm:gap-5 sm:px-5 sm:text-base">
-              <span className="inline-flex items-center gap-1.5"><Award aria-hidden="true" className="size-4 text-marigold" />{gameState.score}</span>
-              <span className="inline-flex items-center gap-1" aria-label={`${gameState.hearts} hearts remaining`}>
-                {Array.from({ length: 3 }, (_, index) => (
-                  <Heart key={index} aria-hidden="true" className={`size-4 ${index < gameState.hearts ? "fill-bride-red text-bride-red" : "text-muted-foreground"}`} />
-                ))}
-              </span>
-              {lastJump && <span className="hidden sm:inline">{lastJump === "bride" ? "Bride" : "Groom"} jumped</span>}
-            </div>
-          </div>
           {heartMessage && (
             <div role="status" className="absolute left-1/2 top-1/2 z-10 w-[min(82%,34rem)] -translate-x-1/2 -translate-y-1/2 rounded-md border border-wedding-gold bg-card px-6 py-4 text-center font-display text-2xl font-semibold text-maroon shadow-lg sm:text-3xl">
               {heartMessage}
