@@ -13,6 +13,8 @@ import {
 } from "@/lib/runner-engine";
 import { getPublicMediaUrl } from "@/lib/game-config";
 import type { WeddingSoundEffect } from "@/lib/wedding-audio";
+import { drawWeddingObstacle, drawComicBubble, drawFunnyCollectible } from "@/components/wedding-track-art";
+import { obstacleKind } from "@/lib/wedding-obstacles";
 
 const PLAYER_X = 310;
 const GROUND_OFFSET = 435;
@@ -224,31 +226,6 @@ function drawHeart(context: CanvasRenderingContext2D, x: number, y: number, size
   context.restore();
 }
 
-function drawObstacleSign(
-  context: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  label: string,
-  palette: CanvasPalette,
-) {
-  const width = 102;
-  const height = 41;
-  context.fillStyle = palette.maroon;
-  context.fillRect(x - 2, y + height, 4, 48);
-  context.beginPath();
-  context.roundRect(x - width / 2, y, width, height, 7);
-  context.fillStyle = palette.card;
-  context.fill();
-  context.lineWidth = 3;
-  context.strokeStyle = palette.gold;
-  context.stroke();
-  context.fillStyle = palette.maroon;
-  context.textAlign = "center";
-  context.textBaseline = "middle";
-  context.font = `700 ${label.length > 18 ? 9 : 11}px "DM Sans", sans-serif`;
-  context.fillText(label, x, y + height / 2, width - 12);
-}
-
 function drawDhol(context: CanvasRenderingContext2D, x: number, y: number, palette: CanvasPalette) {
   context.save();
   context.translate(x, y);
@@ -328,6 +305,7 @@ function drawTrackItems(
   items: RunnerSimulation["track"],
   processed: Set<string>,
   palette: CanvasPalette,
+  time: number,
 ) {
   for (const item of items) {
     if (processed.has(item.id)) continue;
@@ -336,11 +314,11 @@ function drawTrackItems(
     const x = PLAYER_X + (distance / VIEW_DISTANCE) * (RUNNER_LOGICAL_WIDTH - PLAYER_X - 110);
 
     if (item.kind === "obstacle") {
-      drawObstacleSign(context, x, laneTop + 346, item.label, palette);
-      context.fillStyle = palette.marigold;
-      context.beginPath();
-      context.arc(x, laneTop + 432, 12, 0, Math.PI * 2);
-      context.fill();
+      drawWeddingObstacle(context, item.cartoon ?? obstacleKind(item.label, 0), x, laneTop + GROUND_OFFSET, time, palette, 0.88);
+      context.fillStyle = palette.maroon;
+      context.font = '700 16px "DM Sans", sans-serif';
+      context.textAlign = "center";
+      context.fillText(item.label, x, laneTop + GROUND_OFFSET + 32, 200);
     } else if (item.kind === "heart") {
       drawHeart(context, x, laneTop + 363, 22, palette.brideRed);
       context.beginPath();
@@ -350,8 +328,10 @@ function drawTrackItems(
       context.stroke();
     } else if (item.kind === "flower") {
       drawFlower(context, x, laneTop + 365, 14, palette);
-    } else {
+    } else if (item.kind === "dhol") {
       drawDhol(context, x, laneTop + 360, palette);
+    } else {
+      drawFunnyCollectible(context, item.kind, x, laneTop + 362, palette);
     }
   }
 }
@@ -876,6 +856,11 @@ function drawTopBar(
   for (let index = 0; index < 3; index += 1) {
     drawHeart(context, 1840 + index * 24, 29, 13, index < state.hearts ? palette.marigold : palette.secondary);
   }
+  if (state.hearts > 3) {
+    context.fillStyle = palette.cream;
+    context.font = '700 17px "DM Sans", sans-serif';
+    context.fillText(`× ${state.hearts}`, 1900, 64);
+  }
   if (state.boostRemainingMs > 0) {
     context.textAlign = "center";
     context.fillStyle = palette.marigold;
@@ -1009,7 +994,7 @@ function drawFrame(
       const mandapX = PLAYER_X + approach * (RUNNER_LOGICAL_WIDTH - PLAYER_X - 110);
       drawMandap(context, mandapX, groundY, palette);
     }
-    drawTrackItems(context, laneTop, lane.progress, simulation.track, lane.processedItemIds, palette);
+    drawTrackItems(context, laneTop, lane.progress, simulation.track, lane.processedItemIds, palette, lane.animationTimeMs);
     if (boosted) drawSpeedEffects(context, laneTop, lane.animationTimeMs, palette);
     drawCharacter(
       context,
@@ -1029,6 +1014,9 @@ function drawFrame(
       palette,
     );
     drawForegroundPetals(context, laneTop, lane.animationTimeMs, palette, reducedEffects);
+    if (lane.hitReaction && lane.hitReactionRemainingMs > 0) {
+      drawComicBubble(context, lane.hitReaction, 675, laneTop + 115, palette);
+    }
     if (lane.gateStopped && state.gatePopupRemainingMs === 0) {
       context.save();
       context.globalAlpha = 0.9;
@@ -1051,6 +1039,40 @@ function drawFrame(
   context.fillRect(0, RUNNER_LANE_HEIGHT, RUNNER_LOGICAL_WIDTH, 3);
   drawParticles(context, particles, deltaMs);
   drawTopBar(context, simulation, config, roomCode, bridePhoto, groomPhoto, palette);
+
+  if (state.fufa.phase !== "pending" && state.fufa.phase !== "done") {
+    const blessing = state.fufa.phase === "blessing";
+    context.save();
+    context.globalAlpha = 0.38;
+    context.fillStyle = palette.maroon;
+    context.fillRect(0, TOP_BAR_HEIGHT, RUNNER_LOGICAL_WIDTH, RUNNER_LOGICAL_HEIGHT - TOP_BAR_HEIGHT);
+    context.globalAlpha = 1;
+    drawWeddingObstacle(context, 0, 960, 918, state.fufa.elapsedMs, palette, 3.3, blessing);
+    context.fillStyle = palette.maroon;
+    context.beginPath(); context.roundRect(590, 126, 740, 70, 8); context.fill();
+    context.fillStyle = palette.gold;
+    context.font = '700 35px "DM Sans", sans-serif';
+    context.textAlign = "center"; context.textBaseline = "middle";
+    context.fillText(blessing ? "Fufa’s Blessing  ·  +3 hearts" : "Fufa is angry!", 960, 161);
+    drawComicBubble(context, blessing ? "Chalo, aashirwad hai!" : state.fufa.phase === "grumble" ? "Theek hai, theek hai" : "Dono saath mein koodo!", 960, 251, palette, 610);
+    if (state.fufa.phase === "angry") {
+      context.fillStyle = palette.cream;
+      context.font = '700 22px "DM Sans", sans-serif';
+      context.fillText(`JUMP TOGETHER  ·  ${Math.max(0, (4000 - state.fufa.elapsedMs) / 1000).toFixed(1)}s`, 960, 1000);
+      for (const [index, role] of (["bride", "groom"] as const).entries()) {
+        context.fillStyle = state.fufa.jumps[role] !== null && state.fufa.elapsedMs - (state.fufa.jumps[role] ?? 0) <= 600 ? palette.gold : palette.cream;
+        context.beginPath(); context.arc(910 + index * 100, 950, 13, 0, Math.PI * 2); context.fill();
+      }
+    }
+    context.restore();
+    if (blessing) {
+      for (let i = 0; i < (reducedEffects ? 18 : 40); i++) {
+        const x = 240 + ((i * 173 + Math.sin(i) * 50) % 1440);
+        const y = 200 + ((state.fufa.elapsedMs * 0.22 + i * 89) % 820);
+        drawFlower(context, x, y, 9 + i % 6, palette);
+      }
+    }
+  }
 
   if (countdown) {
     context.save();
@@ -1182,7 +1204,7 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
 
       simulation.practiceBots = botRef.current;
       const events = countingDown
-        ? { milestone: null, heartsRefilled: null, finale: false, heartCollected: false, flowerCollected: false, dholCollected: false, stumbled: false }
+        ? { milestone: null, heartsRefilled: null, finale: false, heartCollected: false, flowerCollected: false, dholCollected: false, stumbled: false, blessing: false }
         : simulation.update(delta);
       if (countingDown) {
         simulation.state.bride.jumpRemainingMs = 0;
@@ -1195,6 +1217,10 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
       if (events.heartsRefilled) callbackRefs.current.onHeartsRefilled(events.heartsRefilled);
       if (events.heartCollected || events.flowerCollected || events.dholCollected) callbackRefs.current.onSoundEffect("collect");
       if (events.stumbled) callbackRefs.current.onSoundEffect("stumble");
+      if (events.blessing) {
+        spawnConfetti(particles, 960, 300, reduceEffects ? 30 : 80, palette);
+        callbackRefs.current.onSoundEffect("milestone");
+      }
       if (events.finale && !finaleSentRef.current) {
         finaleSentRef.current = true;
         spawnConfetti(particles, RUNNER_LOGICAL_WIDTH / 2, 220, reduceEffects ? 90 : 220, palette, true);

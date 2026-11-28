@@ -234,7 +234,7 @@ function SetupWorkspace({ config }: { config: Tables<"game_config"> | null }) {
   }
 
   function removeObstacleLabel(index: number) {
-    if (draft.obstacleLabels.length <= 8) return;
+    if (draft.obstacleLabels.length <= 6) return;
     setDraft((current) => ({
       ...current,
       obstacleLabels: current.obstacleLabels.filter((_, itemIndex) => itemIndex !== index),
@@ -436,7 +436,7 @@ function SetupWorkspace({ config }: { config: Tables<"game_config"> | null }) {
           <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
             <div>
               <h2 className="font-display text-2xl font-semibold text-foreground">Obstacle labels</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Add 8–12 playful wedding-day interruptions.</p>
+              <p className="mt-1 text-sm text-muted-foreground">6–12 wedding-day characters</p>
             </div>
             <span className="text-sm font-semibold text-maroon">{draft.obstacleLabels.length} / 12</span>
           </div>
@@ -445,7 +445,7 @@ function SetupWorkspace({ config }: { config: Tables<"game_config"> | null }) {
               <div key={`obstacle-${index}`} className="flex min-w-0 items-center gap-2">
                 <label htmlFor={`obstacle-${index}`} className="sr-only">Obstacle label {index + 1}</label>
                 <Input id={`obstacle-${index}`} value={label} maxLength={80} onChange={(event) => setObstacleLabel(index, event.target.value)} />
-                <Button type="button" variant="ghost" size="icon" disabled={draft.obstacleLabels.length <= 8} title="Remove obstacle label" aria-label={`Remove obstacle label ${index + 1}`} onClick={() => removeObstacleLabel(index)}>
+                <Button type="button" variant="ghost" size="icon" disabled={draft.obstacleLabels.length <= 6} title="Remove obstacle label" aria-label={`Remove obstacle label ${index + 1}`} onClick={() => removeObstacleLabel(index)}>
                   <Trash2 aria-hidden="true" />
                 </Button>
               </div>

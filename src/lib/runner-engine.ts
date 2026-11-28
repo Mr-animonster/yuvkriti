@@ -4,6 +4,7 @@ import type {
   MilestoneDraft,
   PartnerRole,
 } from "@/lib/love-story-types";
+import { obstacleKind, obstacleHitLine, type WeddingObstacleKind } from "@/lib/wedding-obstacles";
 
 export const RUNNER_LOGICAL_WIDTH = 1920;
 export const RUNNER_LOGICAL_HEIGHT = 1080;
@@ -14,13 +15,18 @@ export const JUMP_DURATION_MS = 1_450;
 export const FORGIVING_HITBOX_PERCENT = 1.1;
 export const DHOL_BOOST_DURATION_MS = 3_000;
 
-export type TrackItemKind = "obstacle" | "heart" | "flower" | "dhol";
+export type TrackItemKind = "obstacle" | "heart" | "flower" | "dhol" | "laddoo" | "petals" | "ring";
+export const FUFA_PROGRESS = 60;
+export const FUFA_BEAT_MS = 6_000;
+export const FUFA_JUMP_WINDOW_MS = 600;
+export const HIT_REACTION_MS = 1_500;
 
 export interface TrackItem {
   id: string;
   progress: number;
   kind: TrackItemKind;
   label: string;
+  cartoon?: WeddingObstacleKind;
 }
 
 export interface RunnerLaneState {
@@ -30,6 +36,8 @@ export interface RunnerLaneState {
   animationTimeMs: number;
   gateStopped: boolean;
   processedItemIds: Set<string>;
+  hitReaction: string | null;
+  hitReactionRemainingMs: number;
 }
 
 export interface RunnerWorldState {
@@ -46,6 +54,7 @@ export interface RunnerWorldState {
   groom: RunnerLaneState;
   gateProgress: number[];
   track: TrackItem[];
+  fufa: { phase: "pending" | "angry" | "blessing" | "grumble" | "done"; elapsedMs: number; jumps: Record<PartnerRole, number | null>; rewardPending: boolean };
 }
 
 export interface RunnerFrameEvents {
@@ -56,6 +65,7 @@ export interface RunnerFrameEvents {
   flowerCollected: boolean;
   dholCollected: boolean;
   stumbled: boolean;
+  blessing: boolean;
 }
 
 export function seedFromRoomCode(roomCode: string): number {
@@ -99,7 +109,7 @@ export function createTrack(
     if (gateProgress.some((gate) => Math.abs(gate - progress) < 2.5)) continue;
 
     const roll = random();
-    const kind: TrackItemKind = roll < 0.64 ? "obstacle" : roll < 0.79 ? "heart" : roll < 0.93 ? "flower" : "dhol";
+    const kind: TrackItemKind = roll < 0.58 ? "obstacle" : roll < 0.68 ? "heart" : roll < 0.76 ? "flower" : roll < 0.83 ? "laddoo" : roll < 0.89 ? "petals" : roll < 0.94 ? "ring" : "dhol";
     const label =
       kind === "obstacle"
         ? (labels[Math.floor(random() * labels.length)] ?? labels[0] ?? "Wedding-day twist")
@@ -107,9 +117,9 @@ export function createTrack(
           ? "Love heart"
           : kind === "dhol"
             ? "Dhol Boost"
-            : "Good-luck flower";
+             : kind === "laddoo" ? "Shaadi laddoo" : kind === "petals" ? "Rose petals" : kind === "ring" ? "Ring box" : "Good-luck flower";
 
-    items.push({ id: `track-item-${index}`, progress: Number(progress.toFixed(2)), kind, label });
+    items.push({ id: `track-item-${index}`, progress: Number(progress.toFixed(2)), kind, label, ...(kind === "obstacle" ? { cartoon: obstacleKind(label, index) } : {}) });
     index += 1;
   }
 
@@ -124,6 +134,8 @@ function createLane(): RunnerLaneState {
     animationTimeMs: 0,
     gateStopped: false,
     processedItemIds: new Set(),
+    hitReaction: null,
+    hitReactionRemainingMs: 0,
   };
 }
 
@@ -185,11 +197,24 @@ export class RunnerSimulation {
         (_, index) => ((index + 1) / (config.milestones.length + 1)) * 100,
       ),
       track: this.track,
+      fufa: { phase: "pending", elapsedMs: 0, jumps: { bride: null, groom: null }, rewardPending: false },
     };
   }
 
   jump(role: PartnerRole) {
     const lane = this.state[role];
+    const fufa = this.state.fufa;
+    if (this.state.status === "playing" && fufa.phase === "angry") {
+      lane.jumpRemainingMs = JUMP_DURATION_MS;
+      fufa.jumps[role] = fufa.elapsedMs;
+      const other = fufa.jumps[role === "bride" ? "groom" : "bride"];
+      if (other !== null && Math.abs(fufa.elapsedMs - other) <= FUFA_JUMP_WINDOW_MS) {
+        fufa.phase = "blessing";
+        this.state.hearts += 3;
+        fufa.rewardPending = true;
+      }
+      return;
+    }
     if (this.state.status !== "playing" || lane.gateStopped || lane.stumbleRemainingMs > 0) return;
     lane.jumpRemainingMs = JUMP_DURATION_MS;
   }
@@ -214,6 +239,7 @@ export class RunnerSimulation {
     this.state.currentMilestone = null;
     this.state.bride = createLane();
     this.state.groom = createLane();
+    this.state.fufa = { phase: "pending", elapsedMs: 0, jumps: { bride: null, groom: null }, rewardPending: false };
   }
 
   skipToNextMilestone() {
@@ -247,10 +273,35 @@ export class RunnerSimulation {
       flowerCollected: false,
       dholCollected: false,
       stumbled: false,
+      blessing: false,
     };
     if (this.state.status !== "playing") return events;
 
     const delta = Math.max(0, Math.min(deltaMs, 50));
+    for (const lane of [this.state.bride, this.state.groom]) {
+      lane.hitReactionRemainingMs = Math.max(0, lane.hitReactionRemainingMs - delta);
+      if (lane.hitReactionRemainingMs === 0) lane.hitReaction = null;
+    }
+    const fufa = this.state.fufa;
+    if (fufa.phase === "pending" && Math.min(this.state.bride.progress, this.state.groom.progress) >= FUFA_PROGRESS && this.state.gatePopupRemainingMs === 0) {
+      fufa.phase = "angry";
+    }
+    if (fufa.phase !== "pending" && fufa.phase !== "done") {
+      fufa.elapsedMs += delta;
+      if (this.practiceBots && fufa.phase === "angry") {
+        if (fufa.elapsedMs >= 1_000 && fufa.jumps.bride === null) this.jump("bride");
+        if (fufa.elapsedMs >= 1_200 && fufa.jumps.groom === null) this.jump("groom");
+      }
+      for (const lane of [this.state.bride, this.state.groom]) {
+        lane.animationTimeMs += delta;
+        lane.jumpRemainingMs = Math.max(0, lane.jumpRemainingMs - delta);
+      }
+      if (fufa.phase === "angry" && fufa.elapsedMs >= 4_000) fufa.phase = "grumble";
+      events.blessing = fufa.rewardPending;
+      fufa.rewardPending = false;
+      if (fufa.elapsedMs >= FUFA_BEAT_MS) fufa.phase = "done";
+      return events;
+    }
     if (this.state.refillMessageRemainingMs > 0) {
       this.state.refillMessageRemainingMs = Math.max(0, this.state.refillMessageRemainingMs - delta);
       if (this.state.refillMessageRemainingMs === 0) this.state.refillMessage = null;
@@ -311,10 +362,12 @@ export class RunnerSimulation {
           if (lane.jumpRemainingMs === 0) {
             lane.stumbleRemainingMs = 900;
             this.state.hearts -= 1;
+            lane.hitReaction = obstacleHitLine(item.cartoon ?? obstacleKind(item.label, 0));
+            lane.hitReactionRemainingMs = HIT_REACTION_MS;
             events.stumbled = true;
           }
         } else if (lane.jumpRemainingMs > 0) {
-          this.state.score += item.kind === "heart" ? 150 : item.kind === "dhol" ? 200 : 100;
+          this.state.score += item.kind === "heart" ? 150 : item.kind === "dhol" ? 200 : item.kind === "ring" ? 250 : 100;
           if (item.kind === "heart") events.heartCollected = true;
           else if (item.kind === "dhol") {
             this.state.boostRemainingMs = DHOL_BOOST_DURATION_MS;

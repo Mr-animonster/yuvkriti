@@ -32,3 +32,4 @@ use the editor.
 ## App structure
 
 - Keep screens in `src/routes`, reusable visual elements in `src/components`, and shared game contracts or server-only actions in `src/lib`; this keeps route discovery predictable and security boundaries clear.
+- Keep wedding obstacle identities and reactions in a browser-safe shared catalog, with co-op timing owned by the display simulation; this keeps canvas art and collision outcomes consistent without controller changes.

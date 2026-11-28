@@ -1,0 +1,2 @@
+ALTER TABLE public.game_config DROP CONSTRAINT game_config_obstacle_labels_count;
+ALTER TABLE public.game_config ADD CONSTRAINT game_config_obstacle_labels_count CHECK (cardinality(obstacle_labels) BETWEEN 6 AND 12);

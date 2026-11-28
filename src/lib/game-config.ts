@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import type { GameConfigDraft, MilestoneDraft } from "@/lib/love-story-types";
 import type { Tables } from "@/integrations/supabase/types";
+import { WEDDING_OBSTACLES } from "@/lib/wedding-obstacles";
 
 export const LOVE_STORY_MEDIA_BUCKET = "love-story-media";
 
@@ -48,7 +49,7 @@ export const gameConfigSchema = z.object({
   milestones: z.array(milestoneSchema).min(4, "Add at least 4 milestones.").max(8, "Use no more than 8 milestones."),
   obstacleLabels: z
     .array(oneLineText(80))
-    .min(8, "Add at least 8 obstacle labels.")
+    .min(6, "Add at least 6 obstacle labels.")
     .max(12, "Use no more than 12 obstacle labels."),
 });
 
@@ -119,16 +120,7 @@ export function createSampleGameConfig(): GameConfigDraft {
         year: "2026",
       },
     ],
-    obstacleLabels: [
-      "Sharma Uncle’s Questions",
-      "Mehendi Stains",
-      "DJ’s Playlist",
-      "Dance Floor Detour",
-      "Too Many Sweets",
-      "The Cousin Photo",
-      "Late Baraat",
-      "Missing Safety Pins",
-    ],
+    obstacleLabels: WEDDING_OBSTACLES.map((obstacle) => obstacle.label),
   };
 }
 

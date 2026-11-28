@@ -37,10 +37,11 @@ describe("game configuration limits", () => {
     expect(gameConfigSchema.safeParse(validConfig(9, 8)).success).toBe(false);
   });
 
-  it("accepts 8–12 obstacle labels and rejects values outside that range", () => {
-    expect(gameConfigSchema.safeParse(validConfig(4, 8)).success).toBe(true);
+  it("accepts the six default obstacles through twelve custom labels", () => {
+    expect(createSampleGameConfig().obstacleLabels).toEqual(["Angry Fufa", "Gossip Aunties", "Selfie-Stick Cousin", "DJ Speaker Blast", "Halwai Jalebi Plate", "Dancing Uncle"]);
+    expect(gameConfigSchema.safeParse(validConfig(4, 6)).success).toBe(true);
     expect(gameConfigSchema.safeParse(validConfig(4, 12)).success).toBe(true);
-    expect(gameConfigSchema.safeParse(validConfig(4, 7)).success).toBe(false);
+    expect(gameConfigSchema.safeParse(validConfig(4, 5)).success).toBe(false);
     expect(gameConfigSchema.safeParse(validConfig(4, 13)).success).toBe(false);
   });
 });
