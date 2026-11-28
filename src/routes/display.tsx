@@ -183,10 +183,62 @@ function DisplayPage() {
     refillTimerRef.current = window.setTimeout(() => setHeartMessage(""), 2_700);
   }, []);
 
+  const fadeTimerRef = useRef<number | null>(null);
+  const [hostPanelOpen, setHostPanelOpen] = useState(false);
+
+  const stopMusicFade = useCallback(() => {
+    if (fadeTimerRef.current !== null) window.clearInterval(fadeTimerRef.current);
+    fadeTimerRef.current = null;
+  }, []);
+
   const handleFinale = useCallback(() => {
     setActiveMilestone(null);
     if (milestoneTimerRef.current !== null) window.clearTimeout(milestoneTimerRef.current);
-  }, []);
+    const audio = audioRef.current;
+    if (!audio) return;
+    // Swell for the walk-in, then fade out gently so the music never loops past the finale.
+    audio.loop = false;
+    stopMusicFade();
+    const startedAt = Date.now();
+    const baseVolume = audio.volume;
+    fadeTimerRef.current = window.setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      if (elapsed < 3_000) audio.volume = Math.min(1, baseVolume + (1 - baseVolume) * (elapsed / 3_000));
+      else if (elapsed < 20_000) audio.volume = Math.max(0, Math.min(1, 1 - (elapsed - 12_000) / 8_000));
+      else {
+        audio.volume = 0;
+        audio.pause();
+        stopMusicFade();
+      }
+    }, 100);
+  }, [stopMusicFade]);
+
+  const playAgain = useCallback(() => {
+    stopMusicFade();
+    const audio = audioRef.current;
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.volume = 1;
+      audio.loop = true;
+    }
+    setHostPanelOpen(false);
+    setActiveMilestone(null);
+    setPracticeBots(false);
+    stateRef.current = INITIAL_GAME_STATE;
+    setGameState(INITIAL_GAME_STATE);
+  }, [stopMusicFade]);
+
+  useEffect(() => {
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "h" || event.key === "H") setHostPanelOpen((open) => !open);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      stopMusicFade();
+    };
+  }, [stopMusicFade]);
 
   function startGame(withBots = false) {
     if (!withBots && !canStartGame(players.bride, players.groom, hostOverride)) return;
@@ -203,12 +255,6 @@ function DisplayPage() {
   const musicUrl = config.backgroundMusic ? getPublicMediaUrl(config.backgroundMusic) : null;
   const bridePhotoUrl = config.brideFacePhoto ? getPublicMediaUrl(config.brideFacePhoto) : null;
   const milestonePhotoUrl = activeMilestone?.photoPath ? getPublicMediaUrl(activeMilestone.photoPath) : null;
-  const displayedDate = config.weddingDate
-    ? (() => {
-        const [year, month, day] = config.weddingDate.split("-");
-        return year && month && day ? `${Number(day)}-${Number(month)}-${year}` : "2-12-2026";
-      })()
-    : "2-12-2026";
 
   return (
     <main className="flex min-h-dvh items-center justify-center overflow-hidden bg-background p-3 text-center">
@@ -316,23 +362,23 @@ function DisplayPage() {
               </article>
             </div>
           )}
-          {gameState.status === "complete" && (
-            <div className="pointer-events-none absolute inset-x-0 top-[10%] z-10 mx-auto flex max-w-4xl flex-col items-center px-5 text-center">
-              <p className="inline-flex items-center gap-2 rounded-full border border-wedding-gold/70 bg-card/90 px-4 py-2 text-xs font-semibold uppercase text-marigold sm:text-sm">
-                <Sparkles aria-hidden="true" className="size-4" />
-                And so it begins
-              </p>
-              <h2 className="mt-3 font-display text-4xl font-semibold leading-tight text-maroon sm:text-6xl lg:text-7xl">
-                {config.brideName || "Prakriti"} &amp; {config.groomName || "Yuvraj"}
-              </h2>
-              <p className="mt-1 text-sm font-semibold text-maroon sm:text-xl">{displayedDate}</p>
-              <p className="mt-3 max-w-2xl font-display text-xl font-semibold text-maroon sm:text-3xl">
-                {config.finaleMessage || "And so, their best adventure began."}
-              </p>
-              <p className="mt-2 inline-flex items-center gap-2 rounded-full border border-wedding-gold/70 bg-card/90 px-4 py-2 text-sm font-semibold text-maroon sm:text-lg">
-                <Award aria-hidden="true" className="size-5 text-marigold" />
-                Final score {gameState.score}
-              </p>
+          <button
+            type="button"
+            aria-label="Host controls"
+            onClick={() => setHostPanelOpen((open) => !open)}
+            className="absolute right-0 bottom-0 z-30 size-14 opacity-0"
+          />
+          {hostPanelOpen && (
+            <div className="absolute right-3 bottom-3 z-40 flex flex-col gap-2 rounded-md border border-wedding-gold bg-card/95 p-3 text-left shadow-lg">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Host</p>
+              {gameState.status === "complete" ? (
+                <Button type="button" onClick={playAgain}>
+                  <Sparkles aria-hidden="true" />
+                  Play again
+                </Button>
+              ) : (
+                <p className="max-w-48 text-sm text-muted-foreground">Play again appears after the finale.</p>
+              )}
             </div>
           )}
         </section>

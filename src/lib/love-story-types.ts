@@ -77,6 +77,8 @@ export interface GameStateMessage {
   currentMilestone: string | null;
   lanePositions?: Record<PartnerRole, number>;
   gateWaiting?: Record<PartnerRole, boolean>;
+  /** Set by the display during the finale so controllers stay in sync. */
+  finaleStage?: "celebration" | "playAgain";
 }
 
 export type LoveStoryRealtimeEvent =

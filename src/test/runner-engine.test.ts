@@ -12,6 +12,7 @@ import {
   getRunPaceMultiplier,
   HIT_REACTION_MS,
   FUFA_BEAT_MS,
+  finaleStageAt,
 } from "@/lib/runner-engine";
 
 describe("wedding runner engine", () => {
@@ -173,5 +174,11 @@ describe("wedding runner engine", () => {
     expect(TARGET_RUN_DURATION_MS).toBe(150_000);
     expect(game.getGameState().status).toBe("playing");
     expect(game.track.length).toBeGreaterThan(8);
+  });
+
+  it("keeps controllers on Finale! until the Forever card, then asks Play again?", () => {
+    expect(finaleStageAt(0)).toBe("celebration");
+    expect(finaleStageAt(29_999)).toBe("celebration");
+    expect(finaleStageAt(30_000)).toBe("playAgain");
   });
 });

@@ -15,6 +15,7 @@ import { getPublicMediaUrl } from "@/lib/game-config";
 import type { WeddingSoundEffect } from "@/lib/wedding-audio";
 import { drawWeddingObstacle, drawComicBubble, drawFunnyCollectible } from "@/components/wedding-track-art";
 import { obstacleKind } from "@/lib/wedding-obstacles";
+import { FINALE_FOREVER_MS, finaleStageAt } from "@/lib/runner-engine";
 
 const PLAYER_X = 310;
 const GROUND_OFFSET = 435;
@@ -1095,6 +1096,261 @@ function drawFrame(
   }
 }
 
+function ease(value: number) {
+  const v = Math.max(0, Math.min(1, value));
+  return v * v * (3 - 2 * v);
+}
+
+function drawGarlandRing(context: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, palette: CanvasPalette) {
+  context.save();
+  context.strokeStyle = palette.marigold;
+  context.lineWidth = 9;
+  context.beginPath();
+  context.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+  context.stroke();
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    drawFlower(context, cx + Math.cos(a) * rx, cy + Math.sin(a) * ry, 7, palette);
+  }
+  context.restore();
+}
+
+interface FinaleAssets {
+  backgroundImage: HTMLImageElement;
+  finaleImage: HTMLImageElement;
+  bridePhoto: HTMLImageElement | null;
+  groomPhoto: HTMLImageElement | null;
+  milestonePhotos: (HTMLImageElement | null)[];
+}
+
+function formatFinaleDate(weddingDate: string) {
+  const [year, month, day] = weddingDate.split("-");
+  return year && month && day ? `${Number(day)}-${Number(month)}-${year}` : "2-12-2026";
+}
+
+function drawFinale(
+  context: CanvasRenderingContext2D,
+  simulation: RunnerSimulation,
+  config: GameConfigDraft,
+  palette: CanvasPalette,
+  assets: FinaleAssets,
+  t: number,
+  deltaMs: number,
+  particles: ConfettiPiece[],
+  reducedEffects: boolean,
+  heartsCollected: number,
+) {
+  const state = simulation.state;
+  const W = RUNNER_LOGICAL_WIDTH;
+  const H = RUNNER_LOGICAL_HEIGHT;
+  const still = (role: PartnerRole, walking: boolean) => ({
+    ...state[role],
+    jumpRemainingMs: 0,
+    stumbleRemainingMs: 0,
+    gateStopped: !walking,
+    animationTimeMs: walking ? t : 0,
+  });
+  const merge = ease((t - 2_500) / 2_500);
+
+  // 1–2: walk to the arch, then the lanes slide together.
+  if (t < 5_000) {
+    const walk = ease(t / 2_000);
+    (["bride", "groom"] as const).forEach((role, laneIndex) => {
+      const laneTop = laneIndex * RUNNER_LANE_HEIGHT;
+      const groundY = laneTop + GROUND_OFFSET;
+      context.save();
+      context.globalAlpha = 1 - merge;
+      context.translate(0, (laneIndex === 0 ? 1 : -1) * merge * (RUNNER_LANE_HEIGHT / 2));
+      context.beginPath();
+      context.rect(0, laneTop, W, RUNNER_LANE_HEIGHT);
+      context.clip();
+      drawLaneBackground(context, assets.backgroundImage, laneTop, 0, laneIndex, palette);
+      drawMandap(context, 820, groundY, palette);
+      drawCharacter(context, role, still(role, walk < 1), role === "bride" ? assets.bridePhoto : assets.groomPhoto, palette, PLAYER_X + walk * 400, groundY, reducedEffects);
+      context.restore();
+    });
+    context.save();
+    context.globalAlpha = merge;
+    if (assets.finaleImage.complete && assets.finaleImage.naturalWidth > 0) context.drawImage(assets.finaleImage, 0, 0, W, H);
+    context.restore();
+    const slide = merge * (W / 2);
+    context.fillStyle = palette.maroon;
+    context.fillRect(-slide, RUNNER_LANE_HEIGHT - 4, W / 2, 8);
+    context.fillRect(W / 2 + slide, RUNNER_LANE_HEIGHT - 4, W / 2, 8);
+    context.fillStyle = palette.gold;
+    context.fillRect(-slide, RUNNER_LANE_HEIGHT + 4, W / 2, 3);
+    context.fillRect(W / 2 + slide, RUNNER_LANE_HEIGHT + 4, W / 2, 3);
+    drawParticles(context, particles, deltaMs);
+    return;
+  }
+
+  if (assets.finaleImage.complete && assets.finaleImage.naturalWidth > 0) context.drawImage(assets.finaleImage, 0, 0, W, H);
+  else {
+    context.fillStyle = palette.cream;
+    context.fillRect(0, 0, W, H);
+  }
+
+  // 3: walk in from both sides, varmala, hug.
+  const groundY = 880;
+  const scale = 1.45;
+  const walkIn = ease((t - 5_000) / 3_500);
+  const hug = ease((t - 11_000) / 900) * (1 - ease((t - 13_500) / 900));
+  const brideX = -120 + walkIn * (870 + 120) + hug * 32;
+  const groomX = W + 120 - walkIn * (W + 120 - 1_050) - hug * 32;
+  const walking = t < 8_500;
+  for (const [role, x, lean] of [["bride", brideX, 0.12], ["groom", groomX, -0.12]] as const) {
+    context.save();
+    context.translate(x, groundY);
+    context.rotate(lean * hug);
+    context.scale(scale, scale);
+    context.translate(-x, -groundY);
+    drawCharacter(context, role, still(role, walking), role === "bride" ? assets.bridePhoto : assets.groomPhoto, palette, x, groundY, reducedEffects);
+    context.restore();
+  }
+
+  // Varmala: each garland rises from the giver's hands, over the partner's head, onto their neck.
+  const exchange = (start: number, fromX: number, toX: number) => {
+    const p = ease((t - start) / 1_300);
+    if (t < start) return;
+    const x = fromX + (toX - fromX) * p;
+    const lift = Math.sin(p * Math.PI) * 190;
+    const y = groundY - 160 * scale - lift + p * (40 * scale);
+    drawGarlandRing(context, x, y, 46, 22 + p * 18, palette);
+  };
+  if (t >= 8_700) {
+    exchange(8_700, brideX, groomX);
+    exchange(9_800, groomX, brideX);
+  }
+  if (hug > 0.3) {
+    for (let i = 0; i < 4; i++) {
+      const rise = ((t - 11_000) * 0.08 + i * 40) % 160;
+      drawHeart(context, 930 + (i - 1.5) * 50, groundY - 360 - rise, 22, palette.brideRed);
+    }
+  }
+
+  // 4: petals, title, date, message.
+  if (t >= 11_500) {
+    const petalCount = reducedEffects ? 20 : 46;
+    for (let i = 0; i < petalCount; i++) {
+      const x = (i * 211 + Math.sin(t * 0.001 + i) * 60) % W;
+      const y = ((t - 11_500) * 0.16 + i * 97) % (H + 40) - 20;
+      drawFlower(context, x, y, 7 + (i % 5), palette);
+    }
+    const a = ease((t - 12_000) / 1_200);
+    context.save();
+    context.globalAlpha = a;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = "rgba(255, 248, 235, 0.82)";
+    context.beginPath();
+    context.roundRect(440, 70, 1_040, 300, 28);
+    context.fill();
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 4;
+    context.stroke();
+    context.fillStyle = palette.maroon;
+    context.font = '600 112px "Cormorant Garamond", Georgia, serif';
+    context.fillText(`${config.groomName || "Yuvraj"} & ${config.brideName || "Prakriti"}`, W / 2, 160, 980);
+    context.fillStyle = palette.marigold;
+    context.font = '700 34px "DM Sans", sans-serif';
+    context.fillText(formatFinaleDate(config.weddingDate), W / 2, 238);
+    context.fillStyle = palette.maroon;
+    context.font = 'italic 600 40px "Cormorant Garamond", Georgia, serif';
+    context.fillText(config.finaleMessage || "And so, their best adventure began.", W / 2, 310, 980);
+    context.restore();
+  }
+
+  // 5: milestone photo montage, then score and hearts.
+  if (t >= 14_500) {
+    const a = ease((t - 14_500) / 1_500);
+    const photos = config.milestones.slice(0, 8);
+    const size = 120;
+    const gap = 22;
+    const total = photos.length * size + Math.max(0, photos.length - 1) * gap;
+    context.save();
+    context.globalAlpha = a;
+    context.fillStyle = "rgba(90, 20, 30, 0.72)";
+    context.fillRect(0, H - 170, W, 170);
+    photos.forEach((milestone, index) => {
+      const x = (W - total) / 2 + index * (size + gap);
+      const y = H - 158 + (1 - a) * 30;
+      const image = assets.milestonePhotos[index];
+      context.save();
+      context.beginPath();
+      context.roundRect(x, y, size, size, 12);
+      context.fillStyle = palette.cream;
+      context.fill();
+      context.clip();
+      if (image?.complete && image.naturalWidth > 0) {
+        const ratio = Math.max(size / image.naturalWidth, size / image.naturalHeight);
+        const w = image.naturalWidth * ratio;
+        const h = image.naturalHeight * ratio;
+        context.drawImage(image, x + (size - w) / 2, y + (size - h) / 2, w, h);
+      } else {
+        drawFlower(context, x + size / 2, y + size / 2 - 10, 22, palette);
+      }
+      context.restore();
+      context.strokeStyle = palette.gold;
+      context.lineWidth = 3;
+      context.beginPath();
+      context.roundRect(x, y, size, size, 12);
+      context.stroke();
+      context.fillStyle = palette.cream;
+      context.font = '700 15px "DM Sans", sans-serif';
+      context.textAlign = "center";
+      context.fillText(`${milestone.title} · ${milestone.year}`, x + size / 2, y + size + 2 > H - 4 ? H - 6 : y + size + 2, size + gap - 4);
+    });
+    context.restore();
+  }
+  if (t >= 16_500) {
+    const a = ease((t - 16_500) / 1_000);
+    context.save();
+    context.globalAlpha = a;
+    context.fillStyle = palette.maroon;
+    context.beginPath();
+    context.roundRect(W / 2 - 330, 392, 660, 74, 37);
+    context.fill();
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 3;
+    context.stroke();
+    context.fillStyle = palette.cream;
+    context.font = '700 32px "DM Sans", sans-serif';
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(`Final score ${state.score}   ·   ♥ ${heartsCollected} hearts collected`, W / 2, 430, 620);
+    context.restore();
+  }
+
+  drawParticles(context, particles, deltaMs);
+
+  // 6: gentle closing card. Stays on screen until the host chooses Play again.
+  if (t >= FINALE_FOREVER_MS) {
+    const a = ease((t - FINALE_FOREVER_MS) / 2_000);
+    context.save();
+    context.globalAlpha = a * 0.55;
+    context.fillStyle = palette.maroon;
+    context.fillRect(0, 0, W, H);
+    context.globalAlpha = a;
+    context.fillStyle = palette.cream;
+    context.beginPath();
+    context.roundRect(W / 2 - 460, H / 2 - 190, 920, 380, 32);
+    context.fill();
+    context.strokeStyle = palette.gold;
+    context.lineWidth = 5;
+    context.stroke();
+    drawFlower(context, W / 2, H / 2 - 120, 22, palette);
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillStyle = palette.maroon;
+    context.font = 'italic 600 92px "Cormorant Garamond", Georgia, serif';
+    context.fillText("Forever begins here", W / 2, H / 2 - 10, 860);
+    context.fillStyle = palette.marigold;
+    context.font = '700 30px "DM Sans", sans-serif';
+    context.fillText(`${config.groomName || "Yuvraj"} & ${config.brideName || "Prakriti"}  ·  ${formatFinaleDate(config.weddingDate)}`, W / 2, H / 2 + 90, 860);
+    context.restore();
+  }
+}
+
 export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(function RunnerCanvas(
   { roomCode, config, practiceBots, onState, onMilestone, onHeartsRefilled, onSoundEffect, onFinale },
   ref,
@@ -1104,6 +1360,8 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
   const particlesRef = useRef<ConfettiPiece[]>([]);
   const countdownStartedAtRef = useRef<number | null>(null);
   const finaleSentRef = useRef(false);
+  const finaleStartedAtRef = useRef<number | null>(null);
+  const heartsCollectedRef = useRef(0);
   const callbackRefs = useRef({ onState, onMilestone, onHeartsRefilled, onSoundEffect, onFinale });
   const botRef = useRef(practiceBots);
 
@@ -1144,6 +1402,8 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
         particlesRef.current.length = 0;
         countdownStartedAtRef.current = performance.now();
         finaleSentRef.current = false;
+        finaleStartedAtRef.current = null;
+        heartsCollectedRef.current = 0;
         callbackRefs.current.onState(simulation.getGameState());
       },
     }),
@@ -1166,8 +1426,14 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
     simulationRef.current = simulation;
     const particles: ConfettiPiece[] = [];
     particlesRef.current = particles;
+    const milestonePhotos = config.milestones.map((milestone) => {
+      const url = milestone.photoPath ? getPublicMediaUrl(milestone.photoPath) : null;
+      return url ? loadImage(url) : null;
+    });
     countdownStartedAtRef.current = null;
     finaleSentRef.current = false;
+    finaleStartedAtRef.current = null;
+    heartsCollectedRef.current = 0;
     let frameId = 0;
     let lastFrame = 0;
     let lastStateSentAt = 0;
@@ -1175,6 +1441,7 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
     let fpsWindowStart = 0;
     let fpsFrames = 0;
     let reduceEffects = false;
+    let finaleBurstDone = false;
 
     const loop = (time: number) => {
       const delta = lastFrame === 0 ? 0 : Math.min(time - lastFrame, 50);
@@ -1216,6 +1483,7 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
       }
       if (events.heartsRefilled) callbackRefs.current.onHeartsRefilled(events.heartsRefilled);
       if (events.heartCollected || events.flowerCollected || events.dholCollected) callbackRefs.current.onSoundEffect("collect");
+      if (events.heartCollected) heartsCollectedRef.current += 1;
       if (events.stumbled) callbackRefs.current.onSoundEffect("stumble");
       if (events.blessing) {
         spawnConfetti(particles, 960, 300, reduceEffects ? 30 : 80, palette);
@@ -1223,11 +1491,21 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
       }
       if (events.finale && !finaleSentRef.current) {
         finaleSentRef.current = true;
-        spawnConfetti(particles, RUNNER_LOGICAL_WIDTH / 2, 220, reduceEffects ? 90 : 220, palette, true);
+        finaleStartedAtRef.current = time;
         callbackRefs.current.onSoundEffect("finale");
         callbackRefs.current.onFinale();
       }
-      if (simulation.state.status === "complete" && time - lastFireworkAt > 850) {
+      const finaleElapsed = finaleStartedAtRef.current === null ? 0 : time - finaleStartedAtRef.current;
+      if (finaleStartedAtRef.current !== null && finaleElapsed >= 11_500 && !finaleBurstDone) {
+        finaleBurstDone = true;
+        spawnConfetti(particles, RUNNER_LOGICAL_WIDTH / 2, 260, reduceEffects ? 90 : 220, palette, true);
+      }
+      if (
+        simulation.state.status === "complete" &&
+        finaleElapsed >= 11_500 &&
+        finaleElapsed < FINALE_FOREVER_MS &&
+        time - lastFireworkAt > 850
+      ) {
         lastFireworkAt = time;
         spawnConfetti(
           particles,
@@ -1241,7 +1519,20 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
 
       context.setTransform(1, 0, 0, 1, 0, 0);
       context.clearRect(0, 0, RUNNER_LOGICAL_WIDTH, RUNNER_LOGICAL_HEIGHT);
-      drawFrame(
+      if (simulation.state.status === "complete" && finaleStartedAtRef.current !== null) {
+        drawFinale(
+          context,
+          simulation,
+          config,
+          palette,
+          { backgroundImage, finaleImage, bridePhoto, groomPhoto, milestonePhotos },
+          finaleElapsed,
+          delta,
+          particles,
+          reduceEffects,
+          heartsCollectedRef.current,
+        );
+      } else drawFrame(
         context,
         simulation,
         config,
@@ -1259,7 +1550,10 @@ export const RunnerCanvas = forwardRef<RunnerCanvasHandle, RunnerCanvasProps>(fu
       );
       if (time - lastStateSentAt >= 200) {
         lastStateSentAt = time;
-        callbackRefs.current.onState(simulation.getGameState());
+        const snapshot = simulation.getGameState();
+        callbackRefs.current.onState(
+          snapshot.status === "complete" ? { ...snapshot, finaleStage: finaleStageAt(finaleElapsed) } : snapshot,
+        );
       }
       frameId = requestAnimationFrame(loop);
     };

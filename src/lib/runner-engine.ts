@@ -20,6 +20,13 @@ export const FUFA_PROGRESS = 60;
 export const FUFA_BEAT_MS = 6_000;
 export const FUFA_JUMP_WINDOW_MS = 600;
 export const HIT_REACTION_MS = 1_500;
+/** Celebration sequence length, then the "Forever begins here" card follows ~10s later. */
+export const FINALE_SEQUENCE_MS = 20_000;
+export const FINALE_FOREVER_MS = 30_000;
+
+export function finaleStageAt(elapsedMs: number): "celebration" | "playAgain" {
+  return elapsedMs >= FINALE_FOREVER_MS ? "playAgain" : "celebration";
+}
 
 export interface TrackItem {
   id: string;

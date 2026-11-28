@@ -348,7 +348,7 @@ function ControllerRoom({ roomCode, role }: { roomCode: string; role: PartnerRol
   }
 
   const statusMessage = gameState.status === "complete"
-    ? "Finale!"
+    ? gameState.finaleStage === "playAgain" ? "Play again?" : "Finale!"
     : gameState.status === "waiting"
       ? "Get ready"
       : waitingForPartner
